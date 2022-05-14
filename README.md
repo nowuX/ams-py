@@ -6,7 +6,7 @@
 
 ```shell
 # Download the latest script
-$ curl -O https://raw.githubusercontent.com/nowuX/auto-mc-server.py/dev/script.py
+$ curl https://raw.githubusercontent.com/nowuX/auto-mc-server.py/dev/script.py -o script.py
 
 # Put the file in the folder you want to use
 $ python script.py
