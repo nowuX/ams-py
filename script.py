@@ -75,15 +75,6 @@ def mcdr_setup():
     return option
 
 
-def launch_scripts(cmd: str):
-    with open('start.bat', 'w') as f:
-        f.write('{}\n'.format(cmd))
-    if sys.platform == 'linux':
-        with open('start.sh', 'w') as f:
-            f.write('#!/usr/bin/env bash\n{}\n'.format(cmd))
-        subprocess.run(['chmod', '+x', 'start.sh'])
-
-
 def post_mcdr(jar_file: str):
     # Put loader.jar name in config.yml
     with open('config.yml', 'r') as f:
@@ -102,10 +93,21 @@ def post_mcdr(jar_file: str):
             f.writelines(data)
 
 
+def launch_scripts(cmd: str, python_linux=False):
+    with open('start.bat', 'w') as f:
+        f.write('{}\n'.format(cmd))
+    if sys.platform == 'linux':
+        if python_linux:
+            cmd = cmd.replace('python', 'python3')
+        with open('start.sh', 'w') as f:
+            f.write('#!/usr/bin/env bash\n{}\n'.format(cmd))
+        subprocess.run(['chmod', '+x', 'start.sh'])
+
+
 def post_server(jar_file: str, mcdr: bool):
     if mcdr:
         post_mcdr(jar_file)
-        launch_scripts('python -m mcdreforged start')
+        launch_scripts('python -m mcdreforged start', True)
     else:
         launch_scripts('java -Xms1G -Xmx2G -jar {}.jar nogui'.format(jar_file))
     if simple_yes_no('Do you want to start the server and set EULA=true?'):
@@ -228,7 +230,6 @@ def server_loader():
 
 
 if __name__ == '__main__':
-    os.chdir('temp')
     # Making server folder and enter inside
     mk_folder()
     # MCDR Setup and Loader Setup
