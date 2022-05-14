@@ -3,31 +3,62 @@ import json
 import os
 import subprocess
 import sys
+import winreg
 from urllib.request import urlopen
 
 import requests
 
-# Disable Colors until i fix windows console issue with ANSI
-# class Colors:
-#     GREEN = '\033[92m'
-#     YELLOW = '\033[93m'
-#     RED = '\033[91m'
-#     LIGHT_GREEN = "\033[1;32m"
-#     LIGHT_GRAY = "\033[0;37m"
-#     BOLD = '\033[1m'
-#     END = '\033[0m'
+color_support = True
+
+
+def basic_exception_handler(name: str, exception: Exception):
+    print('Something failed in: {}\n\t> {}'.format(name, exception))
+
+
+def check_ansi_support():
+    global color_support
+    if not color_support:
+        print('Disable color in CLI')
+        return False
+    elif sys.platform == 'win32':
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Console', 0)
+            winreg.QueryValueEx(key, r'VirtualTerminalLevel')
+            winreg.CloseKey(key)
+            print('ANSI support detected, color in CLI enabled')
+            return True
+        except (OSError, FileNotFoundError) as err:
+            basic_exception_handler(check_ansi_support.__name__, err)
+            print('VirtualTerminalLevel value not found for ANSI support in CMD/PowerShell, generating...')
+            try:
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r'Console') as key:
+                    winreg.SetValueEx(key, r'VirtualTerminalLevel', 0, winreg.REG_DWORD, 1)
+                    winreg.CloseKey(key)
+                print('VirtualTerminalLevel created successful!')
+                return True
+            except OSError as err:
+                print('VirtualTerminalLevel failed to create...')
+                basic_exception_handler(check_ansi_support.__name__, err)
+                return False
+    elif sys.platform == 'linux':
+        return True
+
+
 class Colors:
-    GREEN = ''
-    YELLOW = ''
-    RED = ''
-    LIGHT_GREEN = ''
-    LIGHT_GRAY = ''
-    BOLD = ''
-    END = ''
+    GREEN, YELLOW, RED, LIGHT_GREEN, LIGHT_GRAY, BOLD, END = [""] * 7
+    if check_ansi_support():
+        GREEN = '\033[92m'
+        YELLOW = '\033[93m'
+        RED = '\033[91m'
+        LIGHT_GREEN = "\033[1;32m"
+        LIGHT_GRAY = "\033[0;37m"
+        BOLD = '\033[1m'
+        END = '\033[0m'
+
 
 def exception_handler(name: str, exception: Exception):
     first_line = f'{Colors.RED}Something failed in: {Colors.BOLD}{name}{Colors.END}\n'
-    second_line = f'{Colors.LIGHT_GRAY}Exception caught:\n{Colors.END}{exception}'
+    second_line = f'{Colors.LIGHT_GRAY}Exception caught:\n\t> {Colors.END}{exception}'
     print(first_line + second_line)
 
 
@@ -47,6 +78,9 @@ def simple_yes_no(q: str, default_no=True):
 
 def mk_folder():
     folder = input('{}Enter the server name:{} '.format(Colors.BOLD, Colors.END))
+    if not folder:
+        print('Folder name cant be empty!')
+        exit(1)
     if os.path.exists(folder):
         print('Folder already exists!')
         exit(1)
@@ -124,6 +158,8 @@ def post_server(jar_file: str, mcdr: bool):
                 subprocess.run(['start.bat'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             elif sys.platform == 'linux':
                 subprocess.run(['./start.sh'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            else:
+                raise Exception
             print('{}First time server start complete!{}'.format(Colors.LIGHT_GREEN, Colors.END))
             # Set EULA=true
             if mcdr:
