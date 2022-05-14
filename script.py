@@ -7,16 +7,23 @@ from urllib.request import urlopen
 
 import requests
 
-
+# Disable Colors until i fix windows console issue with ANSI
+# class Colors:
+#     GREEN = '\033[92m'
+#     YELLOW = '\033[93m'
+#     RED = '\033[91m'
+#     LIGHT_GREEN = "\033[1;32m"
+#     LIGHT_GRAY = "\033[0;37m"
+#     BOLD = '\033[1m'
+#     END = '\033[0m'
 class Colors:
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    LIGHT_GREEN = "\033[1;32m"
-    LIGHT_GRAY = "\033[0;37m"
-    BOLD = '\033[1m'
-    END = '\033[0m'
-
+    GREEN = ''
+    YELLOW = ''
+    RED = ''
+    LIGHT_GREEN = ''
+    LIGHT_GRAY = ''
+    BOLD = ''
+    END = ''
 
 def exception_handler(name: str, exception: Exception):
     first_line = f'{Colors.RED}Something failed in: {Colors.BOLD}{name}{Colors.END}\n'
@@ -86,8 +93,8 @@ def post_mcdr(jar_file: str):
     with open('permission.yml', 'r') as f:
         data = f.readlines()
     nickname = str(input('{}What is the nickname of the server owner? [Skip]:{} '.format(Colors.BOLD, Colors.END)))
-    print('{}Nickname to set: {}{}'.format(Colors.LIGHT_GRAY, nickname, Colors.END))
     if nickname:
+        print('{}Nickname to set: {}{}'.format(Colors.LIGHT_GRAY, nickname, Colors.END))
         data[13] = '- {}\n'.format(nickname)
         with open('permission.yml', 'w') as f:
             f.writelines(data)
