@@ -3,12 +3,12 @@ import json
 import os
 import subprocess
 import sys
-import winreg
 from urllib.request import urlopen
 
 import requests
 
 color_support = True
+py = "python"
 
 
 def basic_exception_handler(name: str, exception: Exception):
@@ -21,6 +21,7 @@ def check_ansi_support():
         print('Disable color in CLI')
         return False
     elif sys.platform == 'win32':
+        import winreg
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Console', 0)
             winreg.QueryValueEx(key, r'VirtualTerminalLevel')
@@ -102,7 +103,7 @@ def mcdr_setup():
     except ImportError:
         print('{}MCDReforged packaged NOT detected, proceed to install...{}'.format(Colors.YELLOW, Colors.END))
         subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'mcdreforged'])
-    subprocess.run(['python', '-m', 'mcdreforged', 'init'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run([py, '-m', 'mcdreforged', 'init'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     # Server loader
     os.chdir('server')
     option = server_loader()
@@ -134,12 +135,10 @@ def post_mcdr(jar_file: str):
             f.writelines(data)
 
 
-def launch_scripts(cmd: str, python_linux=False):
+def launch_scripts(cmd: str):
     with open('start.bat', 'w') as f:
         f.write('{}\n'.format(cmd))
     if sys.platform == 'linux':
-        if python_linux:
-            cmd = cmd.replace('python', 'python3')
         with open('start.sh', 'w') as f:
             f.write('#!/usr/bin/env bash\n{}\n'.format(cmd))
         subprocess.run(['chmod', '+x', 'start.sh'])
@@ -148,7 +147,7 @@ def launch_scripts(cmd: str, python_linux=False):
 def post_server(jar_file: str, mcdr: bool):
     if mcdr:
         post_mcdr(jar_file)
-        launch_scripts('python -m mcdreforged start', True)
+        launch_scripts('{} -m mcdreforged start'.format(py))
     else:
         launch_scripts('java -Xms1G -Xmx2G -jar {}.jar nogui'.format(jar_file))
     if simple_yes_no('Do you want to start the server and set EULA=true?'):
@@ -248,10 +247,10 @@ def fabric_loader():
 
 def server_loader():
     print(
-        """{0}Which loader do you want to use?{1}
-        \033[1m1)\033[0m Vanilla
-        \033[1m2)\033[0m Fabric
-        \033[1m3)\033[0m Soon [WIP]""".format(Colors.BOLD, Colors.END)
+        """{b}Which loader do you want to use?{e}
+        {b}1){e} Vanilla
+        {b}2){e} Fabric
+        {b}3){e} Soon [WIP]""".format(b=Colors.BOLD, e=Colors.END)
     )
     while True:
         try:
@@ -267,12 +266,15 @@ def server_loader():
             # Exit
             elif option == 3:
                 print('Closing program')
-                exit(0)
+                quit(0)
         except ValueError:
             print('Invalid option, please try again...')
 
 
 if __name__ == '__main__':
+    # Using python3 instead of python on linux
+    if sys.platform == "linux":
+        py = "python3"
     # Making server folder and enter inside
     mk_folder()
     # MCDR Setup and Loader Setup
@@ -282,8 +284,8 @@ if __name__ == '__main__':
         loader = mcdr_setup()
         mcdr_status = True
     else:
-        server_loader()
+        loader = server_loader()
     # Extra post server config
     post_server(loader, mcdr_status)
     print('{}{}› Script done!{}'.format(Colors.GREEN, Colors.BOLD, Colors.END))
-    exit(0)
+    quit(0)

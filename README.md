@@ -6,7 +6,7 @@ btw.
 ### Usage
 
 On Windows the color support requires: `Computer\HKEY_CURRENT_USER\Console => VirtualTerminalLevel` set to 1.
-If you don't agree, you can disable the function that modifies it. To disable the color support change
+If you don't agree, you can disable the function that modifies it. To disable the ANSI color support in windows change
 the `color_support=True` line to `False`
 
 ```shell
@@ -18,7 +18,3 @@ $ python script.py
 ```
 
 Not tested enough, may contain bugs.
-
-### Known Bugs
-
-- . . .
