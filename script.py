@@ -15,7 +15,7 @@ def basic_exception_handler(name: str, exception: Exception):
     print('Something failed in: {}\n\t> {}'.format(name, exception))
 
 
-def check_ansi_support():
+def check_ansi_support() -> bool:
     global color_support
     if not color_support:
         print('Disable color in CLI')
@@ -63,7 +63,7 @@ def exception_handler(name: str, exception: Exception):
     print(first_line + second_line)
 
 
-def simple_yes_no(q: str, default_no=True):
+def simple_yes_no(q: str, default_no=True) -> bool:
     while True:
         choices = ' [y/N]:{} '.format(Colors.END) if default_no else ' [Y/n]:{} '.format(Colors.END)
         ans = str(input(Colors.BOLD + q + choices)).lower().strip()
@@ -95,7 +95,7 @@ def mk_folder():
             exit(1)
 
 
-def mcdr_setup():
+def mcdr_setup() -> str:
     # Check MCDR pip package installation status and init MCDR environment
     try:
         importlib.import_module('mcdreforged')
@@ -174,7 +174,7 @@ def post_server(jar_file: str, mcdr: bool):
             exit(1)
 
 
-def vanilla_loader():
+def vanilla_loader() -> str:
     url = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
     response = urlopen(url)
     version_manifest_json = json.loads(response.read())
@@ -200,9 +200,9 @@ def vanilla_loader():
             exception_handler(vanilla_loader.__name__, err)
 
 
-def fabric_loader():
+def fabric_loader() -> str:
     # Download installer and check java
-    url = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.10.2/fabric-installer-0.10.2.jar'
+    url = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
     fabric_file = str(list(url.split('/'))[7])
     try:
         subprocess.run(['java', '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -245,7 +245,7 @@ def fabric_loader():
             exception_handler(fabric_loader.__name__, err)
 
 
-def server_loader():
+def server_loader() -> str:
     print(
         """{b}Which loader do you want to use?{e}
         {b}1){e} Vanilla
