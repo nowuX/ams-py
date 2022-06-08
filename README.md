@@ -11,7 +11,7 @@ the `color_support=True` line to `False`
 
 ```shell
 # Download the latest version of the script
-$ curl https://raw.githubusercontent.com/nowuX/auto-mc-server.py/main/auto_mc_server.py -o server_mc.py
+$ curl https://raw.githubusercontent.com/nowuX/auto-mc-server.py/main/auto_mc_server.py -o auto_mc_server.py
 
 # Put the file in the folder you want to use
 $ python auto_mc_server.py
