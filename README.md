@@ -14,7 +14,7 @@ the `color_support=True` line to `False`
 $ curl https://raw.githubusercontent.com/nowuX/auto-mc-server.py/main/auto_mc_server.py -o server_mc.py
 
 # Put the file in the folder you want to use
-$ python server_mc.py
+$ python auto_mc_server.py
 ```
 
 Not tested enough, may contain bugs.

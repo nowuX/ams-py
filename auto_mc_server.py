@@ -1,291 +1,354 @@
 import importlib
 import json
+import logging
 import os
+import re
 import subprocess
 import sys
 from urllib.request import urlopen
 
 import requests
+from colorlog import ColoredFormatter
 
-color_support = True
-py = "python"
-
-
-def basic_exception_handler(name: str, exception: Exception):
-    print('Something failed in: {}\n\t> {}'.format(name, exception))
+mojang_versions_manifest = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
+python: str  # Global python program name
+mcdr = "mcdreforged"  # Global mcdr package name
 
 
-def check_ansi_support() -> bool:
-    global color_support
-    if not color_support:
-        print('Disable color in CLI')
-        return False
-    elif sys.platform == 'win32':
-        import winreg
-        try:
-            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Console', 0)
-            winreg.QueryValueEx(key, r'VirtualTerminalLevel')
-            winreg.CloseKey(key)
-            print('ANSI support detected, color in CLI enabled')
-            return True
-        except (OSError, FileNotFoundError) as err:
-            basic_exception_handler(check_ansi_support.__name__, err)
-            print('VirtualTerminalLevel value not found for ANSI support in CMD/PowerShell, generating...')
-            try:
-                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r'Console') as key:
-                    winreg.SetValueEx(key, r'VirtualTerminalLevel', 0, winreg.REG_DWORD, 1)
-                    winreg.CloseKey(key)
-                print('VirtualTerminalLevel created successful!')
-                return True
-            except OSError as err:
-                print('VirtualTerminalLevel failed to create...')
-                basic_exception_handler(check_ansi_support.__name__, err)
-                return False
-    elif sys.platform == 'linux':
-        return True
+class ScriptLogger(logging.Logger):
+    def __init__(self):
+        super().__init__('Script')
+        formatter = ColoredFormatter(
+            "[%(name)s] [%(asctime)s] %(log_color)s%(levelname)-8s%(reset)s: %(message)s",
+            log_colors={
+                'DEBUG': 'cyan',
+                'INFO': 'green',
+                'WARNING': 'yellow',
+                'ERROR': 'red',
+                'CRITICAL': 'bold_red',
+                'INPUT': 'blue',
+            },
+            datefmt="%H:%M:%S",
+            reset=True
+        )
+        self.INPUT = 24
+        logging.addLevelName(self.INPUT, 'INPUT')
+        self.console_handler = logging.StreamHandler()
+        self.console_handler.setFormatter(formatter)
+        self.console_handler.setLevel(logging.DEBUG)
+        self.addHandler(self.console_handler)
+        self.setLevel(logging.DEBUG)
 
 
-class Colors:
-    GREEN, YELLOW, RED, LIGHT_GREEN, LIGHT_GRAY, BOLD, END = [""] * 7
-    if check_ansi_support():
-        GREEN = '\033[92m'
-        YELLOW = '\033[93m'
-        RED = '\033[91m'
-        LIGHT_GREEN = "\033[1;32m"
-        LIGHT_GRAY = "\033[0;37m"
-        BOLD = '\033[1m'
-        END = '\033[0m'
+def input_logger(msg: str):
+    _input_logger = ScriptLogger()
+    _input_logger.console_handler.terminator = ''
+    _input_logger.console_handler.setFormatter(
+        ColoredFormatter("[%(name)s] %(log_color)s%(levelname)-5s%(reset)s: %(white)s%(message)s%(reset)s",
+                         log_colors={'INPUT': 'blue'}))
+    _input_logger.setLevel('INPUT')
+    _input_logger.log(_input_logger.INPUT, msg)
 
 
-def exception_handler(name: str, exception: Exception):
-    first_line = f'{Colors.RED}Something failed in: {Colors.BOLD}{name}{Colors.END}\n'
-    second_line = f'{Colors.LIGHT_GRAY}Exception caught:\n\t> {Colors.END}{exception}'
-    print(first_line + second_line)
+def subprocess_logger(args, stderr: bool = True, stdout: bool = True, exit_in_error=True):
+    sp_logger = ScriptLogger()
+    sp_logger.name = "~"
+    sp_logger.console_handler.setFormatter(
+        ColoredFormatter("%(log_color)s%(name)s%(reset)s %(message)s",
+                         log_colors={'INFO': 'bold', 'ERROR': 'bold_red'},
+                         reset=True))
+    process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if stdout:
+        with process.stdout as p:
+            for line in iter(p.readline, b''):
+                sp_logger.info(line.decode('utf-8').strip())
+    if stderr:
+        with process.stderr as p:
+            for line in iter(p.readline, b''):
+                sp_logger.error(line.decode('utf-8').strip())
+    process.wait()
+    if process.returncode != 0 and exit_in_error:
+        logger.error('Something failed in subprocess execution')
+        exit(1)
+
+
+def check_environment():
+    logger.info('Check environment...')
+    global python
+    match sys.platform:
+        case "win32":
+            python = "python"
+        case "linux":
+            python = "python3"
+        case _:
+            logger.error('OS {} is currently not supported'.format(sys.platform))
+            exit(0)
+
+    if sys.version_info.major < 3 or (sys.version_info.major == 3 and sys.version_info.minor < 10):
+        print(sys.version_info.major)
+        print(sys.version_info.minor)
+        logger.warning('Python 3.6+ is needed')
+        logger.error('Python version {}.{} is too old'.format(sys.version_info.major, sys.version_info.minor))
+        exit(0)
+
+    try:
+        subprocess_logger(['java', '-version'], stderr=False)
+    except FileNotFoundError:
+        logger.warning('Java is needed')
+        logger.error('System can\'t find java')
+        exit(0)
+
+    try:
+        importlib.import_module(mcdr)
+    except ImportError:
+        logger.error('MCDReforged packaged not detected')
+        logger.warning('Installing MCDReforged...')
+        subprocess_logger([python, '-m', 'pip', 'install', mcdr])
 
 
 def simple_yes_no(q: str, default_no=True) -> bool:
     while True:
-        choices = ' [y/N]:{} '.format(Colors.END) if default_no else ' [Y/n]:{} '.format(Colors.END)
-        ans = str(input(Colors.BOLD + q + choices)).lower().strip()
-        if ans[:1] == '':
-            return False if default_no else True
-        else:
-            if ans[:1] == 'yes' or ans[:1] == 'y':
+        choices = ' [y/N]: ' if default_no else ' [Y/n]: '
+        input_logger(q + choices)
+        ans = input().lower().strip()
+        match ans[:1]:
+            case '':
+                return False if default_no else True
+            case 'yes' | 'y':
                 return True
-            if ans[:1] == 'no' or ans[:1] == 'n':
+            case 'no' | 'n':
                 return False
-        print('{} is invalid, please try again...'.format(ans))
+            case _:
+                logger.info('{} is an invalid answer, please try again'.format(ans))
 
 
 def mk_folder():
-    folder = input('{}Enter the server name:{} '.format(Colors.BOLD, Colors.END))
+    input_logger('Enter the server folder name [minecraft_server]: ')
+    folder: str = re.sub(r'\W', '', input().replace(' ', '_'))
     if not folder:
-        print('Folder name cant be empty!')
-        exit(1)
+        folder = 'minecraft_server'
     if os.path.exists(folder):
-        print('Folder already exists!')
-        exit(1)
+        logger.warning('Folder already exists')
+        exit(0)
     else:
         try:
-            print('{}mkdir {}...{}'.format(Colors.LIGHT_GRAY, folder, Colors.END))
+            logger.info('Making folder "{}"...'.format(folder))
             os.mkdir(folder)
             os.chdir(folder)
-        except OSError as err:
-            exception_handler(mk_folder.__name__, err)
-            exit(1)
-
-
-def mcdr_setup() -> str:
-    # Check MCDR pip package installation status and init MCDR environment
-    try:
-        importlib.import_module('mcdreforged')
-        print('{}MCDReforged packaged detected{}'.format(Colors.LIGHT_GRAY, Colors.END))
-    except ImportError:
-        print('{}MCDReforged packaged NOT detected, proceed to install...{}'.format(Colors.YELLOW, Colors.END))
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', 'mcdreforged'])
-    subprocess.run([py, '-m', 'mcdreforged', 'init'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    # Server loader
-    os.chdir('server')
-    option = server_loader()
-    os.chdir('..')
-    # Edit config.yml
-    with open('config.yml', 'r') as f:
-        data = f.readlines()
-        data[19] = 'start_command: java -Xms1G -Xmx2G -jar {}.jar nogui\n'.format(option)
-    with open('config.yml', 'w') as f:
-        f.writelines(data)
-    return option
-
-
-def post_mcdr(jar_file: str):
-    # Put loader.jar name in config.yml
-    with open('config.yml', 'r') as f:
-        data = f.readlines()
-    data[19] = 'start_command: java -Xms1G -Xmx2G -jar {}.jar nogui\n'.format(jar_file)
-    with open('config.yml', 'w') as f:
-        f.writelines(data)
-    # Set nickname of the owner (not necessary)
-    with open('permission.yml', 'r') as f:
-        data = f.readlines()
-    nickname = str(input('{}What is the nickname of the server owner? [Skip]:{} '.format(Colors.BOLD, Colors.END)))
-    if nickname:
-        print('{}Nickname to set: {}{}'.format(Colors.LIGHT_GRAY, nickname, Colors.END))
-        data[13] = '- {}\n'.format(nickname)
-        with open('permission.yml', 'w') as f:
-            f.writelines(data)
-
-
-def launch_scripts(cmd: str):
-    with open('start.bat', 'w') as f:
-        f.write('{}\n'.format(cmd))
-    if sys.platform == 'linux':
-        with open('start.sh', 'w') as f:
-            f.write('#!/usr/bin/env bash\n{}\n'.format(cmd))
-        subprocess.run(['chmod', '+x', 'start.sh'])
-
-
-def post_server(jar_file: str, mcdr: bool):
-    if mcdr:
-        post_mcdr(jar_file)
-        launch_scripts('{} -m mcdreforged start'.format(py))
-    else:
-        launch_scripts('java -Xms1G -Xmx2G -jar {}.jar nogui'.format(jar_file))
-    if simple_yes_no('Do you want to start the server and set EULA=true?'):
-        try:
-            print('{}Starting server for the first time... may take some time{}'.format(Colors.LIGHT_GRAY, Colors.END))
-            if sys.platform == 'win32':
-                subprocess.run(['start.bat'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            elif sys.platform == 'linux':
-                subprocess.run(['./start.sh'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            else:
-                raise Exception
-            print('{}First time server start complete!{}'.format(Colors.LIGHT_GREEN, Colors.END))
-            # Set EULA=true
-            if mcdr:
-                os.chdir('server')
-            with open('eula.txt', 'r') as f:
-                data = f.readlines()
-            data[2] = 'eula=true\n'
-            with open('eula.txt', 'w') as f:
-                f.writelines(data)
-            print('{}EULA set to true!{}'.format(Colors.LIGHT_GREEN, Colors.END))
-        except (Exception, FileNotFoundError) as err:
-            exception_handler(post_server.__name__, err)
+        except OSError:
+            logger.error('Something failed while the folder was being created')
             exit(1)
 
 
 def vanilla_loader() -> str:
-    url = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
-    response = urlopen(url)
-    version_manifest_json = json.loads(response.read())
-    versions = version_manifest_json["versions"]
+    logger.info('Vanilla Loader setup')
     while True:
-        try:
-            mc = str(input('{}Which version do you want to use?:{} '.format(Colors.BOLD, Colors.END)))
-            print('{}Option selected: {}{}'.format(Colors.LIGHT_GRAY, mc, Colors.END))
-            print('{}Downloading vanilla loader...{}'.format(Colors.LIGHT_GRAY, Colors.END))
-            for s in range(len(versions)):
-                if versions[s]['id'] == mc:
-                    url = versions[s]['url']
-                    break
-            response = urlopen(url)
-            version_json = json.loads(response.read())
-            server_url = str(version_json['downloads']['server']['url'])
-            server_file = str(list(server_url.split('/'))[6])
-            r = requests.get(server_url, allow_redirects=True)
-            open(server_file, 'wb').write(r.content)
-            print('{}Download of vanilla loader complete!{}'.format(Colors.LIGHT_GREEN, Colors.END))
-            return server_file
-        except requests.exceptions.RequestException as err:
-            exception_handler(vanilla_loader.__name__, err)
+        input_logger('Which minecraft version do you want to use? [latest]: ')
+        mc: str = input().strip()
+        if re.match(r'[\d.]', mc) or not mc:
+            logger.info('Version selected: {}'.format(mc))
+            logger.info('Downloading vanilla loader...')
+            try:
+                response = urlopen(mojang_versions_manifest)
+                versions_json = json.loads(response.read())['versions']
+                url: str = ''
+                if not mc:
+                    response = urlopen(mojang_versions_manifest)
+                    mc = json.loads(response.read())['latest']['release']
+                for s in range(len(versions_json)):
+                    if versions_json[s]['id'] == mc:
+                        url = versions_json[s]['url']
+                        break
+                response = urlopen(url)
+                version_json = json.loads(response.read())
+                server_url: str = version_json['downloads']['server']['url']
+                server_file = list(server_url.split('/'))[6]
+                r = requests.get(server_url, allow_redirects=True)
+                open(server_file, 'wb').write(r.content)
+                logger.info('Vanilla loader download complete')
+                return server_file.replace('.jar', '')
+            except requests.exceptions.RequestException as err:
+                logger.error('Something failed: {}'.format(err))
+                exit(1)
+        else:
+            logger.warning('Version provided contain invalid characters')
 
 
 def fabric_loader() -> str:
-    # Download installer and check java
-    url = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
-    fabric_file = str(list(url.split('/'))[7])
+    logger.info('Fabric Loader setup')
+    loader_url = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
+    fabric = str(list(loader_url.split('/'))[7])
+    latest: str = 'latest'
     try:
-        subprocess.run(['java', '-version'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        r = requests.get(url, allow_redirects=True)
-        open(fabric_file, 'wb').write(r.content)
-    except (FileNotFoundError, requests.exceptions.RequestException) as err:
-        exception_handler(fabric_loader.__name__, err)
+        logger.info("Downloading fabric loader...")
+        r = requests.get(loader_url, allow_redirects=True)
+        open(fabric, 'wb').write(r.content)
+        while True:
+            input_logger('Which version of Minecraft do you want to use? [latest]: ')
+            mc: str = input().strip()
+            input_logger('Which version of Fabric Loader do you want to use? [latest]: ')
+            loader: str = input().strip()
+
+            if mc and bool(re.match(r'[^\d.]', mc)):
+                logger.warning('Minecraft version provided contain invalid characters')
+                continue
+            if loader and bool(re.match(r'[^\d.]', loader)):
+                logger.warning('Loader version provided contain invalid characters')
+                continue
+            logger.info('Minecraft version selected: {}'.format(latest if not mc else mc))
+            logger.info('Fabric loader version selected: {}'.format(latest if not loader else loader))
+
+            try:
+                logger.info('Installing server resources...')
+                if not mc and not loader:
+                    subprocess_logger(['java', '-jar', fabric, 'server', '-downloadMinecraft'])
+                elif mc and not loader:
+                    subprocess_logger(['java', '-jar', fabric, 'server', '-mcversion', mc, '-downloadMinecraft'])
+                elif not mc and loader:
+                    subprocess_logger(['java', '-jar', fabric, 'server', '-loader', loader, '-downloadMinecraft'])
+                elif mc and loader:
+                    subprocess_logger(
+                        ['java', '-jar', fabric, 'server', '-mcversion', mc, '-loader', loader, '-downloadMinecraft'])
+                logger.info('The download is finished')
+                os.remove(fabric)
+                return 'fabric-server-launch'
+            except requests.exceptions.RequestException as err:
+                logger.error('Something failed: {}'.format(err))
+                exit(1)
+    except requests.exceptions.RequestException as err:
+        logger.error('Something failed: {}'.format(err))
         exit(1)
 
-    # Input minecraft version and loader version (not necessary)
-    while True:
-        mc = str(
-            input('{}Which version of Minecraft do you want to use? [latest]:{} '.format(Colors.BOLD, Colors.END)))
-        print('{}Option selected: {}{}'.format(Colors.LIGHT_GRAY, mc, Colors.END))
-        fabric = str(
-            input('{}Which version of fabric loader do you want to use? [latest]:{} '.format(Colors.BOLD, Colors.END)))
-        print('{}Option selected: {}{}'.format(Colors.LIGHT_GRAY, fabric, Colors.END))
-        try:
-            print('{}Downloading fabric loader...{}'.format(Colors.LIGHT_GRAY, Colors.END))
-            if not mc and not fabric:
-                subprocess.run(
-                    ['java', '-jar', fabric_file, 'server', '-downloadMinecraft'],
-                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if mc and not fabric:
-                subprocess.run(
-                    ['java', '-jar', fabric_file, 'server', '-mcversion', mc, '-downloadMinecraft'],
-                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if not mc and fabric:
-                subprocess.run(
-                    ['java', '-jar', fabric_file, 'server', '-loader', fabric, '-downloadMinecraft'],
-                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if mc and fabric:
-                subprocess.run(
-                    ['java', '-jar', fabric_file, 'server', '-mcversion', mc, '-loader', fabric, '-downloadMinecraft'],
-                    check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            print('{}Download of fabric loader complete!{}'.format(Colors.LIGHT_GREEN, Colors.END))
-            os.remove(fabric_file)
-            return 'fabric-server-launch'
-        except subprocess.CalledProcessError as err:
-            exception_handler(fabric_loader.__name__, err)
+
+def loader_setup(loader: int):
+    match loader:
+        case 1:
+            return vanilla_loader()
+        case 2:
+            return fabric_loader()
+        case _:
+            logger.error('Invalid loader option {}'.format(loader))
 
 
-def server_loader() -> str:
-    print(
-        """{b}Which loader do you want to use?{e}
-        {b}1){e} Vanilla
-        {b}2){e} Fabric
-        {b}3){e} Soon [WIP]""".format(b=Colors.BOLD, e=Colors.END)
-    )
-    while True:
+def launch_scripts(cmd: str):
+    logger.info('Creating launch scripts...')
+    try:
+        with open('start.bat', 'w') as f:
+            f.write('@echo off\n{}\n'.format(cmd))
+        with open('start.sh', 'w') as f:
+            f.write('#!\\bin\\bash\n{}\n'.format(cmd))
+        if sys.platform == 'linux':
+            subprocess_logger(['chmod', '+x', 'start.sh'])
+    except FileNotFoundError as err:
+        logger.error('Something failed while generating the scripts: {}'.format(err))
+        exit(1)
+
+
+def mcdr_setup(loader: int):
+    logger.info('MCDR setup')
+    subprocess_logger([python, '-m', mcdr, 'init'])
+    os.chdir('server')
+    jar_name = loader_setup(loader)
+    os.chdir('..')
+    try:
+        with open('config.yml', 'r') as f:
+            data = f.readlines()
+            data[19] = 'start_command: {}\n'.format(start_command(jar_name))
+        with open('config.yml', 'w') as f:
+            f.writelines(data)
+        input_logger('Set the nickname of the server owner? [Skip]: ')
+        nickname = input().strip()
+        if nickname:
+            logger.info('Nickname to set: {}'.format(nickname))
+            with open('permission.yml', 'r') as f:
+                data = f.readlines()
+                data[13] = '- {}\n'.format(nickname)
+            with open('permission.yml', 'w') as f:
+                f.writelines(data)
+    except FileNotFoundError as err:
+        logger.error('Something failed: {}'.format(err))
+        exit(1)
+
+
+def start_command(jar_name: str) -> str:
+    return 'java -Xms1G -Xmx2G -jar {}.jar nogui'.format(jar_name)
+
+
+def post_setup(jar_file: str = None, mcdr_environment: bool = False):
+    if mcdr_environment:
+        launch_scripts('{} -m mcdreforged start'.format(python))
+    else:
+        launch_scripts(start_command(jar_file))
+    if simple_yes_no('Do you want to start the server and set EULA=true?'):
+        logger.info('Starting the server for the first time')
+        logger.info('May take some time...')
         try:
-            option = int(input('{}Select a option:{} '.format(Colors.BOLD, Colors.END)))
-            # Vanilla
-            if option == 1:
-                print('{}Option selected: Vanilla{}'.format(Colors.LIGHT_GRAY, Colors.END))
-                return vanilla_loader()
-            # Fabric
-            elif option == 2:
-                print('{}Option selected: Fabric{}'.format(Colors.LIGHT_GRAY, Colors.END))
-                return fabric_loader()
-            # Exit
+            if mcdr_environment:
+                with open('config.yml', 'r') as f:
+                    data = f.readlines()
+                    data[77] = 'disable_console_thread: true\n'
+                with open('config.yml', 'w') as f:
+                    f.writelines(data)
+            match sys.platform:
+                case 'win32':
+                    subprocess_logger([r'start.bat'])
+                case 'linux':
+                    subprocess_logger([r'./start.sh'])
+                case _:
+                    raise Exception
+            logger.info('First time server start complete')
+            if mcdr_environment:
+                with open('config.yml', 'r') as f:
+                    data = f.readlines()
+                    data[77] = 'disable_console_thread: false\n'
+                with open('config.yml', 'w') as f:
+                    f.writelines(data)
+                os.chdir('server')
+            with open('eula.txt', 'r') as f:
+                data = f.readlines()
+                data[2] = 'eula=true\n'
+            with open('eula.txt', 'w') as f:
+                f.writelines(data)
+            logger.info('EULA set to true complete')
+        except (FileNotFoundError, Exception) as err:
+            logger.error('Something failed: {}'.format(err))
+            exit(1)
+
+
+def server_loader() -> int:
+    logger.info("Which loader do you want to use?")
+    logger.info("\t1 - Vanilla")
+    logger.info("\t2 - Fabric")
+    logger.info("\t3 - Close script")
+    while True:
+        input_logger("Select a option: ")
+        try:
+            option = int(input())
+            if option in range(1, 3):
+                return option
             elif option == 3:
-                print('Closing program')
-                quit(0)
+                logger.info('Close script...')
+                return exit(0)
+            else:
+                logger.warning('Input is not within the options')
         except ValueError:
-            print('Invalid option, please try again...')
+            logger.warning('Input is not a integer')
+
+
+def main():
+    logger.info('Auto server script is starting up')
+    check_environment()
+    mk_folder()
+    loader = server_loader()
+    if simple_yes_no('Do you want to use MCDR?'):
+        mcdr_setup(loader)
+        post_setup(mcdr_environment=True)
+    else:
+        post_setup(jar_file=loader_setup(loader))
+    logger.info('Script done')
+    return
 
 
 if __name__ == '__main__':
-    # Using python3 instead of python on linux
-    if sys.platform == "linux":
-        py = "python3"
-    # Making server folder and enter inside
-    mk_folder()
-    # MCDR Setup and Loader Setup
-    mcdr_status = False
-    loader = int
-    if simple_yes_no('{}Do you want to use MCDR?'.format(Colors.BOLD)):
-        loader = mcdr_setup()
-        mcdr_status = True
-    else:
-        loader = server_loader()
-    # Extra post server config
-    post_server(loader, mcdr_status)
-    print('{}{}› Script done!{}'.format(Colors.GREEN, Colors.BOLD, Colors.END))
-    quit(0)
+    logger = ScriptLogger()  # Create global logger
+    sys.exit(main())
