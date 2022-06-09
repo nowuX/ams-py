@@ -9,6 +9,8 @@ $ curl https://raw.githubusercontent.com/nowuX/auto-mc-server.py/main/auto_mc_se
 
 # Install requirements
 $ pip install -r requirements.txt
+# Or
+$ pip install requests colorlog
 
 # Put the file in the folder you want to use and execute
 $ python auto_mc_server.py
