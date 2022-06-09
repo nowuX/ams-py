@@ -33,8 +33,8 @@ class ScriptLogger(logging.Logger):
             datefmt="%H:%M:%S",
             reset=True
         )
-        self.input = 24
-        logging.addLevelName(self.input, 'INPUT')
+        self.INPUT = 24
+        logging.addLevelName(self.INPUT, 'INPUT')
         self.console_handler = logging.StreamHandler()
         self.console_handler.setFormatter(formatter)
         self.console_handler.setLevel(logging.DEBUG)
@@ -51,7 +51,7 @@ def input_logger(msg: str):
             "[%(name)s] %(log_color)s%(levelname)-5s%(reset)s: %(white)s%(message)s%(reset)s",
             log_colors={'INPUT': 'blue'}))
     _input_logger.setLevel('INPUT')
-    _input_logger.log(_input_logger.input, msg)
+    _input_logger.log(_input_logger.INPUT, msg)
 
 
 def subprocess_logger(args, stderr: bool = True, stdout: bool = True, exit_in_error=True):
@@ -171,7 +171,7 @@ def vanilla_loader() -> str:
                 server_url: str = version_json['downloads']['server']['url']
                 server_file = list(server_url.split('/'))[6]
                 response = requests.get(server_url, allow_redirects=True)
-                with open(server_file, 'wb', encoding='utf-8').write(response.content):
+                with open(server_file, 'wb').write(response.content):
                     pass
                 logger.info('Vanilla loader download complete')
                 return server_file.replace('.jar', '')
@@ -190,7 +190,7 @@ def fabric_loader() -> str:
     try:
         logger.info("Downloading fabric loader...")
         response = requests.get(LOADER_URL, allow_redirects=True)
-        with open(fabric, 'wb', encoding='utf-8') as file:
+        with open(fabric, 'wb') as file:
             file.write(response.content)
         while True:
             input_logger('Which version of Minecraft do you want to use? [latest]: ')
@@ -317,7 +317,7 @@ def post_setup(jar_file: str = None, mcdr_environment: bool = False, py_cmd: str
                     raise Exception
             logger.info('First time server start complete')
             if mcdr_environment:
-                with open('config.yml', 'r', encoding='') as file:
+                with open('config.yml', 'r', encoding='utf-8') as file:
                     data = file.readlines()
                     data[77] = 'disable_console_thread: false\n'
                 with open('config.yml', 'w', encoding='utf-8') as file:
