@@ -16,7 +16,7 @@ $ pip install requests colorlog
 $ python auto_mc_server.py
 ```
 ### Loaders support
- - Vanilla [1.2.5 - 1.19+]✔️
+ - Vanilla [1.2.5 - 1.19+] ✔️
  - Fabric [1.14 - 1.19+] ✔️
  - Quilt ⚠️ Support soon
 
