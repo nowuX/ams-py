@@ -171,8 +171,8 @@ def vanilla_loader() -> str:
                 server_url: str = version_json['downloads']['server']['url']
                 server_file = list(server_url.split('/'))[6]
                 response = requests.get(server_url, allow_redirects=True)
-                with open(server_file, 'wb').write(response.content):
-                    pass
+                with open(server_file, 'wb') as file:
+                    file.write(response.content)
                 logger.info('Vanilla loader download complete')
                 return server_file.replace('.jar', '')
             except requests.exceptions.RequestException as err:
