@@ -11,6 +11,7 @@ import requests
 from colorlog import ColoredFormatter
 
 mojang_versions_manifest = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
+loader_url = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
 python: str  # Global python program name
 mcdr = "mcdreforged"  # Global mcdr package name
 
@@ -44,7 +45,8 @@ def input_logger(msg: str):
     _input_logger = ScriptLogger()
     _input_logger.console_handler.terminator = ''
     _input_logger.console_handler.setFormatter(
-        ColoredFormatter("[%(name)s] %(log_color)s%(levelname)-5s%(reset)s: %(white)s%(message)s%(reset)s",
+        ColoredFormatter(
+            "[%(name)s] %(log_color)s%(levelname)-5s%(reset)s: %(white)s%(message)s%(reset)s",
                          log_colors={'INPUT': 'blue'}))
     _input_logger.setLevel('INPUT')
     _input_logger.log(_input_logger.INPUT, msg)
@@ -87,8 +89,7 @@ def check_environment():
     if sys.version_info.major < 3 or (sys.version_info.major == 3 and sys.version_info.minor < 10):
         print(sys.version_info.major)
         print(sys.version_info.minor)
-        logger.warning('Python 3.6+ is needed')
-        logger.error('Python version {}.{} is too old'.format(sys.version_info.major, sys.version_info.minor))
+        logger.warning('Python 3.10+ is needed')
         exit(0)
 
     try:
@@ -176,7 +177,6 @@ def vanilla_loader() -> str:
 
 def fabric_loader() -> str:
     logger.info('Fabric Loader setup')
-    loader_url = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
     fabric = str(list(loader_url.split('/'))[7])
     latest: str = 'latest'
     try:
