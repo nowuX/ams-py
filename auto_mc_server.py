@@ -1,3 +1,4 @@
+"""Main python script"""
 import importlib
 import json
 import logging
@@ -10,9 +11,10 @@ from urllib.request import urlopen
 import requests
 from colorlog import ColoredFormatter
 
-MOJANG_VERSIONS_MANIFEST = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
-LOADER_URL = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
-MCDR = "mcdreforged"  # Global mcdr package name
+MOJANG_VERSIONS_MANIFEST: str = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
+LOADER_URL: str = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
+MINECRAFT: str = ''
+MCDR: str = 'mcdreforged'  # Global mcdr package name
 
 
 class ScriptLogger(logging.Logger):
@@ -89,8 +91,8 @@ def check_environment() -> str:
         case _:
             logger.error('OS %s is currently not supported', sys.platform)
             sys.exit(0)
-
-    if sys.version_info.major < 3 or (sys.version_info.major == 3 and sys.version_info.minor < 10):
+    major_version, minor_version = sys.version_info.major, sys.version_info.minor
+    if major_version < 3 or (major_version == 3 and minor_version < 10):
         logger.warning('Python 3.10+ is needed')
         sys.exit(0)
 
@@ -151,19 +153,27 @@ def vanilla_loader() -> str:
     logger.info('Vanilla Loader setup')
     while True:
         input_logger('Which minecraft version do you want to use? [latest]: ')
-        _mc: str = input().strip()
-        if re.match(r'[\d.]', _mc) or not _mc:
-            logger.info('Version selected: %s', _mc)
+        version: str = input().strip()
+
+        tmp = version.split('.')
+        major, minor = int(tmp[1]), int(tmp[2]) if len(tmp) == 3 else 0
+        is_invalid = major < 2 or (major == 2 and minor < 5)
+        if is_invalid:
+            logger.warning('This version is currently unsupported by the script')
+            return sys.exit(1)
+
+        if re.match(r'[\d.]', version) or not version:
+            logger.info('Version selected: %s', version)
             logger.info('Downloading vanilla loader...')
             try:
                 with urlopen(MOJANG_VERSIONS_MANIFEST) as response:
                     versions_json = json.loads(response.read())['versions']
                 url: str = ''
-                if not _mc:
+                if not version:
                     with urlopen(MOJANG_VERSIONS_MANIFEST) as response:
-                        _mc = json.loads(response.read())['latest']['release']
+                        version = json.loads(response.read())['latest']['release']
                 for i in range(len(versions_json)):
-                    if versions_json[i]['id'] == _mc:
+                    if versions_json[i]['id'] == version:
                         url = versions_json[i]['url']
                         break
                 with urlopen(url) as response:
@@ -174,6 +184,8 @@ def vanilla_loader() -> str:
                 with open(server_file, 'wb') as file:
                     file.write(response.content)
                 logger.info('Vanilla loader download complete')
+                _globals = globals()
+                _globals['MINECRAFT'] = version
                 return server_file.replace('.jar', '')
             except requests.exceptions.RequestException as err:
                 logger.error('Something failed: %s', err)
@@ -222,6 +234,8 @@ def fabric_loader() -> str:
                          '-downloadMinecraft'])
                 logger.info('The download is finished')
                 os.remove(fabric)
+                _globals = globals()
+                _globals['MINECRAFT'] = minecraft
                 return 'fabric-server-launch'
             except requests.exceptions.RequestException as err:
                 logger.error('Something failed: %s', err)
@@ -291,7 +305,7 @@ def start_command(jar_name: str) -> str:
     return f'java -Xms1G -Xmx2G -jar {jar_name}.jar nogui'
 
 
-def post_setup(jar_file: str = None, is_mcdr: bool = False, python: str = None):
+def post_setup(is_mcdr: bool = False, python: str = None, jar_file: str = None):
     """Create server launch scripts and set EULA=true
     :param jar_file: Minecraft server jar name
     :param is_mcdr: Validate if is a MCDReforged environment
@@ -300,6 +314,14 @@ def post_setup(jar_file: str = None, is_mcdr: bool = False, python: str = None):
         launch_scripts(f'{python} -m mcdreforged start')
     else:
         launch_scripts(start_command(jar_file))
+
+    tmp = MINECRAFT.split('.')
+    major, minor = int(tmp[1]), int(tmp[2]) if len(tmp) == 3 else 0
+    is_invalid = major < 7 or (major == 7 and minor < 10)
+    if is_invalid:
+        logger.warning('Minecraft version too old, EULA does not exists ')
+        return
+
     if simple_yes_no('Do you want to start the server and set EULA=true?'):
         logger.info('Starting the server for the first time')
         logger.info('May take some time...')
@@ -344,16 +366,16 @@ def server_loader() -> int:
     logger.info("\t3 - Close script")
     while True:
         input_logger("Select a option: ")
-        try:
-            option = int(input())
-            if option in range(1, 3):
-                return option
-            if option == 3:
-                logger.info('Close script...')
+        option = input().lower().strip()
+        match option:
+            case '1' | 'vanilla':
+                return 1
+            case '2' | 'fabric':
+                return 2
+            case '3' | 'exit':
+                logger.info('Closing script...')
                 return sys.exit(0)
-            logger.warning('Input is not within the options')
-        except ValueError:
-            logger.warning('Input is not a integer')
+        logger.warning('Input is not within the options')
 
 
 def main():
@@ -363,11 +385,12 @@ def main():
     mk_folder()
     loader = server_loader()
     if simple_yes_no('Do you want to use MCDR?'):
-        mcdr_setup(loader, py_cmd=python)
+        mcdr_setup(loader, python)
         post_setup(is_mcdr=True, python=python)
     else:
-        post_setup(jar_file=loader_setup(loader), python=python)
+        post_setup(python=python, jar_file=loader_setup(loader))
     logger.info('Script done')
+    return 0
 
 
 if __name__ == '__main__':
