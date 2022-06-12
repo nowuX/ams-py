@@ -24,8 +24,10 @@ class ScriptLogger(logging.Logger):
 
     def __init__(self):
         super().__init__('Script')
+        self.input = 24
+        logging.addLevelName(self.input, 'INPUT')
         formatter = ColoredFormatter(
-            "[%(name)s] [%(asctime)s] %(log_color)s%(levelname)-8s%(reset)s: %(message)s",
+            '%(log_color)s[%(name)s] %(levelname)-8s:%(reset)s %(message)s',
             log_colors={
                 'DEBUG': 'cyan',
                 'INFO': 'green',
@@ -34,26 +36,20 @@ class ScriptLogger(logging.Logger):
                 'CRITICAL': 'bold_red',
                 'INPUT': 'blue',
             },
-            datefmt="%H:%M:%S",
+            datefmt='%H:%M:%S',
             reset=True
         )
-        self.input = 24
-        logging.addLevelName(self.input, 'INPUT')
         self.console_handler = logging.StreamHandler()
         self.console_handler.setFormatter(formatter)
         self.console_handler.setLevel(logging.DEBUG)
         self.addHandler(self.console_handler)
-        self.setLevel(logging.DEBUG)
+        self.setLevel(logging.INFO)
 
 
 def input_logger(msg: str):
     """Creates a logger for input()"""
     _input_logger = ScriptLogger()
     _input_logger.console_handler.terminator = ''
-    _input_logger.console_handler.setFormatter(
-        ColoredFormatter(
-            "[%(name)s] %(log_color)s%(levelname)-5s%(reset)s: %(white)s%(message)s%(reset)s",
-            log_colors={'INPUT': 'blue'}))
     _input_logger.setLevel('INPUT')
     _input_logger.log(_input_logger.input, msg)
 
@@ -61,16 +57,16 @@ def input_logger(msg: str):
 def subprocess_logger(args, stderr: bool = True, stdout: bool = True, exit_in_error: bool = True):
     """Creates a logger for catch all subprocess.Popen()"""
     sp_logger = ScriptLogger()
-    sp_logger.name = "~"
+    sp_logger.name = '$'
     sp_logger.console_handler.setFormatter(
-        ColoredFormatter("%(log_color)s%(name)s%(reset)s %(message)s",
-                         log_colors={'INFO': 'bold', 'ERROR': 'bold_red'},
+        ColoredFormatter('%(log_color)s%(name)s: %(reset)s%(message)s',
+                         log_colors={'DEBUG': 'bold', 'ERROR': 'bold_red'},
                          reset=True))
     with subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
         if stdout:
             with process.stdout as _stdout:
                 for line in iter(_stdout.readline, b''):
-                    sp_logger.info(line.decode('utf-8').strip())
+                    sp_logger.debug(line.decode('utf-8').strip())
         if stderr:
             with process.stderr as _stderr:
                 for line in iter(_stderr.readline, b''):
@@ -83,13 +79,14 @@ def subprocess_logger(args, stderr: bool = True, stdout: bool = True, exit_in_er
 
 def check_environment() -> str:
     """Check all script requirements"""
-    logger.info('Check environment...')
+    logger.debug('Check environment...')
     py_cmd: str
     match sys.platform:
-        case "win32":
-            py_cmd = "python"
-        case "linux":
-            py_cmd = "python3"
+        case 'win32':
+            logger.debug('')
+            py_cmd = 'python'
+        case 'linux':
+            py_cmd = 'python3'
         case _:
             logger.error('OS %s is currently not supported', sys.platform)
             sys.exit(0)
@@ -128,7 +125,7 @@ def simple_yes_no(question: str, default_no=True) -> bool:
             case 'no' | 'n':
                 return False
             case _:
-                logger.info('%s is an invalid answer, please try again', ans)
+                logger.warning('%s is an invalid answer, please try again', ans)
 
 
 def mk_folder():
@@ -152,7 +149,7 @@ def mk_folder():
 
 def vanilla_loader() -> str:
     """Install minecraft vanilla loader"""
-    logger.info('Vanilla Loader setup')
+    logger.debug('Vanilla Loader setup')
     while True:
         input_logger('Which minecraft version do you want to use? [latest]: ')
         version: str = input().strip()
@@ -165,7 +162,7 @@ def vanilla_loader() -> str:
             return sys.exit(1)
 
         if re.match(r'[\d.]', version) or not version:
-            logger.info('Version selected: %s', version)
+            logger.info('Version selected: %s', 'latest' if not version else version)
             logger.info('Downloading vanilla loader...')
             try:
                 with urlopen(MOJANG_VERSIONS_MANIFEST) as response:
@@ -185,9 +182,9 @@ def vanilla_loader() -> str:
                 response = requests.get(server_url, allow_redirects=True)
                 with open(server_file, 'wb') as file:
                     file.write(response.content)
-                logger.info('Vanilla loader download complete')
                 _globals = globals()
                 _globals['MINECRAFT'] = version
+                logger.info('Vanilla server installation complete')
                 return server_file.replace('.jar', '')
             except requests.exceptions.RequestException as err:
                 logger.error('Something failed: %s', err)
@@ -198,10 +195,9 @@ def vanilla_loader() -> str:
 
 def fabric_loader() -> str:
     """Install minecraft fabric loader"""
-    logger.info('Fabric Loader setup')
+    logger.debug('Fabric Loader setup')
     fabric = str(list(LOADER_URL.split('/'))[7])
-    latest: str = 'latest'
-    logger.info("Downloading fabric loader...")
+    logger.info('Downloading fabric loader...')
     try:
         response = requests.get(LOADER_URL, allow_redirects=True)
         with open(fabric, 'wb') as file:
@@ -218,31 +214,30 @@ def fabric_loader() -> str:
             if fabric_version and bool(re.match(r'[^\d.]', fabric_version)):
                 logger.warning('Loader version provided contain invalid characters')
                 continue
-            logger.info('Minecraft version selected: %s', latest if not minecraft else minecraft)
-            logger.info('Fabric loader version selected: %s', latest if not fabric_version else fabric_version)
+            break
 
-            try:
-                logger.info('Installing server resources...')
-                if not minecraft and not fabric_version:
-                    subprocess_logger(['java', '-jar', fabric, 'server', '-downloadMinecraft'])
-                elif minecraft and not fabric_version:
-                    subprocess_logger(['java', '-jar', fabric, 'server', '-mcversion', minecraft, '-downloadMinecraft'])
-                elif not minecraft and fabric_version:
-                    subprocess_logger(
-                        ['java', '-jar', fabric, 'server', '-loader', fabric_version, '-downloadMinecraft'])
-                elif minecraft and fabric_version:
-                    subprocess_logger(
-                        ['java', '-jar', fabric, 'server', '-mcversion', minecraft, '-loader', fabric_version,
-                         '-downloadMinecraft'])
-                logger.info('The download is finished')
-                os.remove(fabric)
-                _globals = globals()
-                _globals['MINECRAFT'] = minecraft
-                return 'fabric-server-launch'
-            except requests.exceptions.RequestException as err:
-                logger.error('Something failed: %s', err)
-            except ValueError as err:
-                logger.error('Something failed: %s', err)
+        logger.info('Minecraft version selected: %s', 'latest' if not minecraft else minecraft)
+        logger.info('Fabric loader version selected: %s', 'latest' if not fabric_version else fabric_version)
+        logger.debug('Installing fabric server...')
+
+        if not minecraft and not fabric_version:
+            subprocess_logger(['java', '-jar', fabric, 'server', '-downloadMinecraft'])
+        elif minecraft and not fabric_version:
+            subprocess_logger(['java', '-jar', fabric, 'server', '-mcversion', minecraft, '-downloadMinecraft'])
+        elif not minecraft and fabric_version:
+            subprocess_logger(
+                ['java', '-jar', fabric, 'server', '-loader', fabric_version, '-downloadMinecraft'])
+        elif minecraft and fabric_version:
+            subprocess_logger(
+                ['java', '-jar', fabric, 'server', '-mcversion', minecraft, '-loader', fabric_version,
+                 '-downloadMinecraft'])
+        logger.info('Fabric server installation complete')
+        os.remove(fabric)
+        _globals = globals()
+        _globals['MINECRAFT'] = minecraft
+        return 'fabric-server-launch'
+    except ValueError as err:
+        logger.error('Something failed: %s', err)
     except requests.exceptions.RequestException as err:
         logger.error('Something failed: %s', err)
         sys.exit(1)
@@ -250,10 +245,11 @@ def fabric_loader() -> str:
 
 def carpet112_setup() -> str:
     """Install carpet 1.12 loader"""
-    logger.info('Carpet 1.12 loader setup')
+    logger.debug('Carpet 1.12 loader setup')
     _globals = globals()
     _globals['MINECRAFT'] = '1.12.2'
     try:
+        logger.info('Downloading carpet112...')
         response = requests.get(CARPET_112, allow_redirects=True)
         carpet_installer: str = CARPET_112.split('/')[7]
         with open(carpet_installer, 'wb') as file:
@@ -269,6 +265,7 @@ def carpet112_setup() -> str:
         os.rename(carpet_name, 'server.jar')
         os.remove(carpet_installer)
         shutil.rmtree('update')
+        logger.info('Carpet112 server installation complete')
         return 'server'
     except requests.exceptions.RequestException as err:
         logger.error('Something failed: %s', err)
@@ -309,7 +306,7 @@ def launch_scripts(cmd: str):
 
 def mcdr_setup(loader: int, py_cmd: str):
     """Install and configure MCDReforged"""
-    logger.info('MCDR setup')
+    logger.debug('MCDR setup')
     subprocess_logger([py_cmd, '-m', MCDR, 'init'])
     os.chdir('server')
     jar_name = loader_setup(loader)
@@ -321,7 +318,7 @@ def mcdr_setup(loader: int, py_cmd: str):
         with open('config.yml', 'w', encoding='utf-8') as file:
             file.writelines(data)
         input_logger('Set the nickname of the server owner? [Skip]: ')
-        nickname = input().strip()
+        nickname: str = input().strip()
         if nickname:
             logger.info('Nickname to set: %s', nickname)
             with open('permission.yml', 'r', encoding='utf-8') as file:
@@ -353,7 +350,7 @@ def post_setup(is_mcdr: bool = False, python: str = None, jar_file: str = None):
     major, minor = int(tmp[1]), int(tmp[2]) if len(tmp) == 3 else 0
     is_invalid = major < 7 or (major == 7 and minor < 10)
     if is_invalid:
-        logger.warning('Minecraft version too old, EULA does not exists ')
+        logger.warning('Minecraft version too old, EULA does not exists')
         return
 
     if simple_yes_no('Do you want to start the server and set EULA=true?'):
@@ -371,8 +368,6 @@ def post_setup(is_mcdr: bool = False, python: str = None, jar_file: str = None):
                     subprocess_logger([r'start.bat'])
                 case 'linux':
                     subprocess_logger([r'./start.sh'])
-                case _:
-                    raise Exception
             logger.info('First time server start complete')
             if is_mcdr:
                 with open('config.yml', 'r', encoding='utf-8') as file:
@@ -394,13 +389,13 @@ def post_setup(is_mcdr: bool = False, python: str = None, jar_file: str = None):
 
 def server_loader() -> int:
     """Choose the server loader"""
-    logger.info("Which loader do you want to use?")
-    logger.info("\t1 | Vanilla")
-    logger.info("\t2 | Fabric")
-    logger.info("\t3 | Carpet112 (Carpet 1.12)")
-    logger.info("\t4 | Close script")
+    logger.info('Which loader do you want to use?')
+    logger.info(' 1 | Vanilla')
+    logger.info(' 2 | Fabric')
+    logger.info(' 3 | Carpet112 (Carpet 1.12)')
+    logger.info(' 4 | Close script')
     while True:
-        input_logger("Select a option: ")
+        input_logger('Select a option: ')
         option = input().lower().strip()
         match option:
             case '1' | 'vanilla':
@@ -425,7 +420,8 @@ def main():
         mcdr_setup(loader, python)
         post_setup(is_mcdr=True, python=python)
     else:
-        post_setup(python=python, jar_file=loader_setup(loader))
+        minecraft_jar: str = loader_setup(loader)
+        post_setup(python=python, jar_file=minecraft_jar)
     logger.info('Script done')
     return 0
 
