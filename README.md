@@ -17,8 +17,8 @@ $ python auto_mc_server.py
 ```
 
 ### Loaders support
- - Vanilla [1.2.5 - 1.19+] ✔️
- - Fabric [1.14 - 1.19+] ✔️
- - Quilt ⚠️ Support soon
+ - [Vanilla](https://www.minecraft.net/) [1.2.5 - 1.19+] ✔️
+ - [Fabric](https://fabricmc.net/) [1.14 - 1.19+] ✔️
+ - [Quilt](https://quiltmc.org/) ⚠️ Support soon
 
 Not tested enough, may contain bugs. 😉
