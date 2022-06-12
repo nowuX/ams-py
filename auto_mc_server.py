@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 import sys
 from urllib.request import urlopen
@@ -13,6 +14,7 @@ from colorlog import ColoredFormatter
 
 MOJANG_VERSIONS_MANIFEST: str = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
 LOADER_URL: str = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
+CARPET_112: str = 'https://gitlab.com/Xcom/carpetinstaller/uploads/24d0753d3f9a228e9b8bbd46ce672dbe/carpetInstaller.jar'
 MINECRAFT: str = ''
 MCDR: str = 'mcdreforged'  # Global mcdr package name
 
@@ -246,6 +248,36 @@ def fabric_loader() -> str:
         sys.exit(1)
 
 
+def carpet112_setup() -> str:
+    """Install carpet 1.12 loader"""
+    logger.info('Carpet 1.12 loader setup')
+    _globals = globals()
+    _globals['MINECRAFT'] = '1.12.2'
+    try:
+        response = requests.get(CARPET_112, allow_redirects=True)
+        carpet_installer: str = CARPET_112.split('/')[7]
+        with open(carpet_installer, 'wb') as file:
+            file.write(response.content)
+        subprocess_logger(['java', '-jar', carpet_installer])
+        os.chdir('update')
+        carpet_name: str = ''
+        for file in os.listdir(os.getcwd()):
+            if file.endswith('.zip'):
+                carpet_name = file.replace('zip', 'jar')
+        shutil.move(carpet_name, '..')
+        os.chdir('..')
+        os.rename(carpet_name, 'server.jar')
+        os.remove(carpet_installer)
+        shutil.rmtree('update')
+        return 'server'
+    except requests.exceptions.RequestException as err:
+        logger.error('Something failed: %s', err)
+        sys.exit(1)
+    except OSError as err:
+        logger.error('Something failed: %s', err)
+        sys.exit(1)
+
+
 def loader_setup(loader: int) -> str:
     """Call loader function"""
     match loader:
@@ -253,6 +285,8 @@ def loader_setup(loader: int) -> str:
             return vanilla_loader()
         case 2:
             return fabric_loader()
+        case 3:
+            return carpet112_setup()
         case _:
             logger.error('Invalid loader option %s', loader)
             sys.exit(1)
@@ -361,9 +395,10 @@ def post_setup(is_mcdr: bool = False, python: str = None, jar_file: str = None):
 def server_loader() -> int:
     """Choose the server loader"""
     logger.info("Which loader do you want to use?")
-    logger.info("\t1 - Vanilla")
-    logger.info("\t2 - Fabric")
-    logger.info("\t3 - Close script")
+    logger.info("\t1 | Vanilla")
+    logger.info("\t2 | Fabric")
+    logger.info("\t3 | Carpet112 (Carpet 1.12)")
+    logger.info("\t4 | Close script")
     while True:
         input_logger("Select a option: ")
         option = input().lower().strip()
@@ -372,7 +407,9 @@ def server_loader() -> int:
                 return 1
             case '2' | 'fabric':
                 return 2
-            case '3' | 'exit':
+            case '3' | 'carpet112':
+                return 3
+            case '4' | 'exit':
                 logger.info('Closing script...')
                 return sys.exit(0)
         logger.warning('Input is not within the options')
