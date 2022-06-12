@@ -238,9 +238,10 @@ def fabric_loader() -> str:
         return 'fabric-server-launch'
     except ValueError as err:
         logger.error('Something failed: %s', err)
+        return sys.exit(1)
     except requests.exceptions.RequestException as err:
         logger.error('Something failed: %s', err)
-        sys.exit(1)
+        return sys.exit(1)
 
 
 def carpet112_setup() -> str:
