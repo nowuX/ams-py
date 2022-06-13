@@ -20,7 +20,7 @@ MCDR: str = 'mcdreforged'  # Global mcdr package name
 
 
 class ScriptLogger(logging.Logger):
-    """Creates a Logger for script CLI output logging"""
+    """Main Class for script Logging"""
 
     def __init__(self):
         super().__init__('Script')
@@ -47,15 +47,27 @@ class ScriptLogger(logging.Logger):
 
 
 def input_logger(msg: str):
-    """Creates a logger for input()"""
+    """Create a logger for user input
+
+    :param msg: Message to display in console
+    :return: 0
+    """
     _input_logger = ScriptLogger()
     _input_logger.console_handler.terminator = ''
     _input_logger.setLevel('INPUT')
     _input_logger.log(_input_logger.input, msg)
+    return 0
 
 
-def subprocess_logger(args, stderr: bool = True, stdout: bool = True, exit_in_error: bool = True):
-    """Creates a logger for catch all subprocess.Popen()"""
+def subprocess_logger(args: list, stderr: bool = True, stdout: bool = True, exit_in_error: bool = True):
+    """Create a logger to print all subprocess.Popen()
+
+    :param args: Arguments to execute.
+    :param stderr: Print stderr output. Defaults to True.
+    :param stdout: Print stdout output. Defaults to True.
+    :param exit_in_error: Error in subprocess cause a sys.exit(1). Defaults to True.
+    :return: 0
+    """
     sp_logger = ScriptLogger()
     sp_logger.name = '$'
     sp_logger.console_handler.setFormatter(
@@ -74,11 +86,15 @@ def subprocess_logger(args, stderr: bool = True, stdout: bool = True, exit_in_er
         process.wait()
         if process.returncode != 0 and exit_in_error:
             logger.error('Something failed in subprocess execution')
-            sys.exit(1)
+            return sys.exit(1)
+    return 0
 
 
 def check_environment() -> str:
-    """Check all script requirements"""
+    """Function to validate each script requirement
+
+    :return: Python global command.
+    """
     logger.debug('Check environment...')
     py_cmd: str
     match sys.platform:
@@ -89,18 +105,18 @@ def check_environment() -> str:
             py_cmd = 'python3'
         case _:
             logger.error('OS %s is currently not supported', sys.platform)
-            sys.exit(0)
+            return sys.exit(0)
     major_version, minor_version = sys.version_info.major, sys.version_info.minor
     if major_version < 3 or (major_version == 3 and minor_version < 10):
         logger.warning('Python 3.10+ is needed')
-        sys.exit(0)
+        return sys.exit(0)
 
     try:
         subprocess_logger(['java', '-version'], stderr=False)
     except FileNotFoundError:
         logger.warning('Java is needed')
         logger.error('System can\'t find java')
-        sys.exit(0)
+        return sys.exit(0)
 
     try:
         importlib.import_module(MCDR)
@@ -112,7 +128,12 @@ def check_environment() -> str:
 
 
 def simple_yes_no(question: str, default_no=True) -> bool:
-    """Make a simple yes or no question"""
+    """Make a simple yes or no question
+
+    :param question: Question to display in console.
+    :param default_no: Is the answer no by default?. Defaults to True.
+    :return: Boolean.
+    """
     while True:
         choices = ' [y/N]: ' if default_no else ' [Y/n]: '
         input_logger(question + choices)
@@ -129,26 +150,34 @@ def simple_yes_no(question: str, default_no=True) -> bool:
 
 
 def mk_folder():
-    """Make server folder"""
+    """Create a folder for server install
+
+    :return: 0
+    """
     input_logger('Enter the server folder name [minecraft_server]: ')
     folder: str = re.sub(r'\W', '', input().replace(' ', '_'))
+
     if not folder:
         folder = 'minecraft_server'
     if os.path.exists(folder):
         logger.warning('Folder already exists')
-        sys.exit(0)
-    else:
-        try:
-            logger.info('Making folder: %s...', folder)
-            os.mkdir(folder)
-            os.chdir(folder)
-        except OSError:
-            logger.error('Something failed while the folder was being created')
-            sys.exit(1)
+        return sys.exit(0)
+
+    try:
+        logger.info('Making folder: %s...', folder)
+        os.mkdir(folder)
+        os.chdir(folder)
+        return 0
+    except OSError:
+        logger.error('Something failed while the folder was being created')
+        return sys.exit(1)
 
 
 def vanilla_loader() -> str:
-    """Install minecraft vanilla loader"""
+    """Function to install and setup Vanilla Loader
+
+    :return: Server jar name.
+    """
     logger.debug('Vanilla Loader setup')
     while True:
         input_logger('Which minecraft version do you want to use? [latest]: ')
@@ -188,13 +217,16 @@ def vanilla_loader() -> str:
                 return server_file.replace('.jar', '')
             except requests.exceptions.RequestException as err:
                 logger.error('Something failed: %s', err)
-                sys.exit(1)
+                return sys.exit(1)
         else:
             logger.warning('Version provided contain invalid characters')
 
 
 def fabric_loader() -> str:
-    """Install minecraft fabric loader"""
+    """Function to install and setup Fabric Loader
+
+    :return: Server jar name.
+    """
     logger.debug('Fabric Loader setup')
     fabric = str(list(LOADER_URL.split('/'))[7])
     logger.info('Downloading fabric loader...')
@@ -245,7 +277,10 @@ def fabric_loader() -> str:
 
 
 def carpet112_setup() -> str:
-    """Install carpet 1.12 loader"""
+    """Function to install and setup Carpet112
+
+    :return: Server jar name.
+    """
     logger.debug('Carpet 1.12 loader setup')
     _globals = globals()
     _globals['MINECRAFT'] = '1.12.2'
@@ -270,14 +305,18 @@ def carpet112_setup() -> str:
         return 'server'
     except requests.exceptions.RequestException as err:
         logger.error('Something failed: %s', err)
-        sys.exit(1)
+        return sys.exit(1)
     except OSError as err:
         logger.error('Something failed: %s', err)
-        sys.exit(1)
+        return sys.exit(1)
 
 
 def loader_setup(loader: int) -> str:
-    """Call loader function"""
+    """Run function to each loader
+
+    :param loader: Server loader.
+    :return: Server loader jar name.
+    """
     match loader:
         case 1:
             return vanilla_loader()
@@ -287,11 +326,15 @@ def loader_setup(loader: int) -> str:
             return carpet112_setup()
         case _:
             logger.error('Invalid loader option %s', loader)
-            sys.exit(1)
+            return sys.exit(1)
 
 
 def launch_scripts(cmd: str):
-    """Create and write launch script for server launch"""
+    """Create server launch scripts to Windows and Linux systems
+
+    :param cmd: Command to put in the launch script.
+    :return: 0
+    """
     logger.info('Creating launch scripts...')
     try:
         with open('start.bat', 'w', encoding='utf-8') as file:
@@ -300,13 +343,19 @@ def launch_scripts(cmd: str):
             file.write(f'#!\\bin\\bash\n{cmd}\n')
         if sys.platform == 'linux':
             subprocess_logger(['chmod', '+x', 'start.sh'])
+        return 0
     except FileNotFoundError as err:
         logger.error('Something failed while generating the scripts: %s', err)
-        sys.exit(1)
+        return sys.exit(1)
 
 
 def mcdr_setup(loader: int, py_cmd: str):
-    """Install and configure MCDReforged"""
+    """Function to install and configure MCDReforged
+
+    :param loader: Server loader.
+    :param py_cmd: Python global command.
+    :return: 0
+    """
     logger.debug('MCDR setup')
     subprocess_logger([py_cmd, '-m', MCDR, 'init'])
     os.chdir('server')
@@ -327,21 +376,29 @@ def mcdr_setup(loader: int, py_cmd: str):
                 data[13] = f'- {nickname}\n'
             with open('permission.yml', 'w', encoding='utf-8') as file:
                 file.writelines(data)
+        return 0
     except FileNotFoundError as err:
         logger.error('Something failed: %s', err)
-        sys.exit(1)
+        return sys.exit(1)
 
 
 def start_command(jar_name: str) -> str:
-    """return a string within server jar name"""
+    """Return a string with the launch command
+
+    :param jar_name: Server jar name.
+    :return: String with launch command.
+    """
     return f'java -Xms1G -Xmx2G -jar {jar_name}.jar nogui'
 
 
 def post_setup(is_mcdr: bool = False, python: str = None, jar_file: str = None):
-    """Create server launch scripts and set EULA=true
-    :param jar_file: Minecraft server jar name
-    :param is_mcdr: Validate if is a MCDReforged environment
-    :param python: python standard command"""
+    """Create server launch scripts, version filter and try to start the server
+
+    :param is_mcdr: Check if is a MCDR environment. Defaults to False.
+    :param python: Python global command. Defaults to None.
+    :param jar_file: Server jar name. Defaults to None.
+    :return: 0
+    """
     if is_mcdr:
         launch_scripts(f'{python} -m mcdreforged start')
     else:
@@ -352,7 +409,7 @@ def post_setup(is_mcdr: bool = False, python: str = None, jar_file: str = None):
     is_invalid = major < 7 or (major == 7 and minor < 10)
     if is_invalid:
         logger.warning('Minecraft version too old, EULA does not exists')
-        return
+        return 0
 
     if simple_yes_no('Do you want to start the server and set EULA=true?'):
         logger.info('Starting the server for the first time')
@@ -385,11 +442,15 @@ def post_setup(is_mcdr: bool = False, python: str = None, jar_file: str = None):
             logger.info('EULA set to true complete')
         except FileNotFoundError as err:
             logger.error('Something failed: %s', err)
-            sys.exit(1)
+            return sys.exit(1)
+    return 0
 
 
 def server_loader() -> int:
-    """Choose the server loader"""
+    """Function to choose the server loader
+
+    :return: Server loader.
+    """
     logger.info('Which loader do you want to use?')
     logger.info(' 1 | Vanilla')
     logger.info(' 2 | Fabric')
@@ -412,7 +473,7 @@ def server_loader() -> int:
 
 
 def main():
-    """Initialize the script"""
+    """Main script function"""
     logger.info('Auto server script is starting up')
     python = check_environment()
     mk_folder()
