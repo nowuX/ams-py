@@ -13,8 +13,9 @@ import requests
 from colorlog import ColoredFormatter
 
 MOJANG_VERSIONS_MANIFEST: str = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
-LOADER_URL: str = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
 CARPET_112: str = 'https://gitlab.com/Xcom/carpetinstaller/uploads/24d0753d3f9a228e9b8bbd46ce672dbe/carpetInstaller.jar'
+FABRIC_URL: str = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
+QUILT_URL: str = 'https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/latest/quilt-installer-latest.jar'
 MINECRAFT: str = ''
 MCDR: str = 'mcdreforged'  # Global mcdr package name
 
@@ -71,7 +72,7 @@ def subprocess_logger(args: list, stderr: bool = True, stdout: bool = True, exit
     sp_logger = ScriptLogger()
     sp_logger.name = '$'
     sp_logger.console_handler.setFormatter(
-        ColoredFormatter('%(log_color)s%(name)s: %(reset)s%(message)s',
+        ColoredFormatter('%(log_color)s%(name)s : %(reset)s%(message)s',
                          log_colors={'DEBUG': 'bold', 'ERROR': 'bold_red'},
                          reset=True))
     with subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as process:
@@ -173,35 +174,43 @@ def mk_folder():
         return sys.exit(1)
 
 
+def get_last_release() -> str:
+    """Get last Minecraft Server Release
+
+    :return: Last Release
+    """
+    with urlopen(MOJANG_VERSIONS_MANIFEST) as response:
+        return json.loads(response.read())['latest']['release']
+
+
 def vanilla_loader() -> str:
-    """Function to install and setup Vanilla Loader
+    """Function to install the Vanilla Loader
 
     :return: Server jar name.
     """
     logger.debug('Vanilla Loader setup')
     while True:
         input_logger('Which minecraft version do you want to use? [latest]: ')
-        version: str = input().strip()
+        minecraft: str = input().strip()
 
-        tmp = version.split('.')
+        tmp = minecraft.split('.')
         major, minor = int(tmp[1]), int(tmp[2]) if len(tmp) == 3 else 0
         is_invalid = major < 2 or (major == 2 and minor < 5)
         if is_invalid:
             logger.warning('This version is currently unsupported by the script')
             return sys.exit(1)
 
-        if re.match(r'[\d.]', version) or not version:
-            logger.info('Version selected: %s', 'latest' if not version else version)
+        if re.match(r'[\d.]', minecraft) or not minecraft:
+            logger.info('Version selected: %s', 'latest' if not minecraft else minecraft)
             logger.info('Downloading vanilla loader...')
             try:
                 with urlopen(MOJANG_VERSIONS_MANIFEST) as response:
                     versions_json = json.loads(response.read())['versions']
                 url: str = ''
-                if not version:
-                    with urlopen(MOJANG_VERSIONS_MANIFEST) as response:
-                        version = json.loads(response.read())['latest']['release']
+                if not minecraft:
+                    minecraft = get_last_release()
                 for i in range(len(versions_json)):
-                    if versions_json[i]['id'] == version:
+                    if versions_json[i]['id'] == minecraft:
                         url = versions_json[i]['url']
                         break
                 with urlopen(url) as response:
@@ -211,8 +220,7 @@ def vanilla_loader() -> str:
                 response = requests.get(server_url, allow_redirects=True)
                 with open(server_file, 'wb') as file:
                     file.write(response.content)
-                _globals = globals()
-                _globals['MINECRAFT'] = version
+                globals()['MINECRAFT'] = minecraft
                 logger.info('Vanilla server installation complete')
                 return server_file.replace('.jar', '')
             except requests.exceptions.RequestException as err:
@@ -223,16 +231,16 @@ def vanilla_loader() -> str:
 
 
 def fabric_loader() -> str:
-    """Function to install and setup Fabric Loader
+    """Function to install the Fabric Loader
 
     :return: Server jar name.
     """
     logger.debug('Fabric Loader setup')
-    fabric = str(list(LOADER_URL.split('/'))[7])
+    installer = str(list(FABRIC_URL.split('/'))[7])
     logger.info('Downloading fabric loader...')
     try:
-        response = requests.get(LOADER_URL, allow_redirects=True)
-        with open(fabric, 'wb') as file:
+        response = requests.get(FABRIC_URL, allow_redirects=True)
+        with open(installer, 'wb') as file:
             file.write(response.content)
         while True:
             input_logger('Which version of Minecraft do you want to use? [latest]: ')
@@ -251,23 +259,68 @@ def fabric_loader() -> str:
         logger.info('Minecraft version selected: %s', 'latest' if not minecraft else minecraft)
         logger.info('Fabric loader version selected: %s', 'latest' if not fabric_version else fabric_version)
         logger.debug('Installing fabric server...')
-
+        _download_mc: str = '-downloadMinecraft'
         if not minecraft and not fabric_version:
-            subprocess_logger(['java', '-jar', fabric, 'server', '-downloadMinecraft'])
+            subprocess_logger(
+                ['java', '-jar', installer, 'server', _download_mc])
         elif minecraft and not fabric_version:
-            subprocess_logger(['java', '-jar', fabric, 'server', '-mcversion', minecraft, '-downloadMinecraft'])
+            subprocess_logger(
+                ['java', '-jar', installer, 'server', '-mcversion', minecraft, _download_mc])
         elif not minecraft and fabric_version:
             subprocess_logger(
-                ['java', '-jar', fabric, 'server', '-loader', fabric_version, '-downloadMinecraft'])
+                ['java', '-jar', installer, 'server', '-loader', fabric_version, _download_mc])
         elif minecraft and fabric_version:
             subprocess_logger(
-                ['java', '-jar', fabric, 'server', '-mcversion', minecraft, '-loader', fabric_version,
-                 '-downloadMinecraft'])
+                ['java', '-jar', installer, 'server', '-mcversion', minecraft, '-loader', fabric_version, _download_mc])
         logger.info('Fabric server installation complete')
-        os.remove(fabric)
-        _globals = globals()
-        _globals['MINECRAFT'] = minecraft
+        os.remove(installer)
+        globals()['MINECRAFT'] = minecraft
         return 'fabric-server-launch'
+    except ValueError as err:
+        logger.error('Something failed: %s', err)
+        return sys.exit(1)
+    except requests.exceptions.RequestException as err:
+        logger.error('Something failed: %s', err)
+        return sys.exit(1)
+
+
+def quilt_loader() -> str:
+    """Function to install the Quilt Loader
+
+    :return: Server jar name.
+    """
+    logger.debug('Quilt Loader setup')
+    installer = str(list(QUILT_URL.split('/'))[9])
+    logger.info('Downloading quilt loader...')
+    try:
+        os.chdir('..')
+        response = requests.get(QUILT_URL, allow_redirects=True)
+        with open(installer, 'wb') as file:
+            file.write(response.content)
+        while True:
+            input_logger('Which version of Minecraft do you want to use? [latest]: ')
+            minecraft: str = input().strip()
+            if minecraft and bool(re.match(r'[^\d.]', minecraft)):
+                logger.warning('Minecraft version provided contain invalid characters!')
+                continue
+            break
+
+        logger.info('Minecraft version selected: %s', 'latest' if not minecraft else minecraft)
+        logger.debug('Installing quilt server...')
+
+        if not minecraft:
+            minecraft = get_last_release()
+        while True:
+            subprocess_logger(
+                ['java', '-jar', installer, 'install', 'server', minecraft, '--download-server'])
+            if os.path.isfile(r'./server/server.jar'):
+                break
+            logger.warning('Server.jar not found, re-installing Quilt loader...')
+        logger.info('Quilt server installation complete')
+        os.remove(installer)
+        os.chdir('server')
+        globals()['MINECRAFT'] = minecraft
+        return 'quilt-server-launch'
     except ValueError as err:
         logger.error('Something failed: %s', err)
         return sys.exit(1)
@@ -282,8 +335,7 @@ def carpet112_setup() -> str:
     :return: Server jar name.
     """
     logger.debug('Carpet 1.12 loader setup')
-    _globals = globals()
-    _globals['MINECRAFT'] = '1.12.2'
+    globals()['MINECRAFT'] = '1.12.2'
     try:
         logger.info('Downloading carpet112...')
         response = requests.get(CARPET_112, allow_redirects=True)
@@ -323,6 +375,8 @@ def loader_setup(loader: int) -> str:
         case 2:
             return fabric_loader()
         case 3:
+            return quilt_loader()
+        case 4:
             return carpet112_setup()
         case _:
             logger.error('Invalid loader option %s', loader)
@@ -454,8 +508,9 @@ def server_loader() -> int:
     logger.info('Which loader do you want to use?')
     logger.info(' 1 | Vanilla')
     logger.info(' 2 | Fabric')
-    logger.info(' 3 | Carpet112 (Carpet 1.12)')
-    logger.info(' 4 | Close script')
+    logger.info(' 3 | Quilt')
+    logger.info(' 4 | Carpet112 (Carpet 1.12)')
+    logger.info(' 5 | Close script')
     while True:
         input_logger('Select a option: ')
         option = input().lower().strip()
@@ -464,9 +519,11 @@ def server_loader() -> int:
                 return 1
             case '2' | 'fabric':
                 return 2
-            case '3' | 'carpet112':
+            case '3' | 'quilt':
                 return 3
-            case '4' | 'exit':
+            case '4' | 'carpet112':
+                return 4
+            case '5' | 'exit':
                 logger.info('Closing script...')
                 return sys.exit(0)
         logger.warning('Input is not within the options')
