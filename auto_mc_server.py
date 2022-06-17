@@ -192,7 +192,7 @@ def vanilla_loader() -> str:
     while True:
         input_logger('Which minecraft version do you want to use? [latest]: ')
         minecraft: str = input().strip()
-
+        minecraft = get_last_release() if not minecraft else minecraft
         tmp = minecraft.split('.')
         major, minor = int(tmp[1]), int(tmp[2]) if len(tmp) == 3 else 0
         is_invalid = major < 2 or (major == 2 and minor < 5)
@@ -200,7 +200,7 @@ def vanilla_loader() -> str:
             logger.warning('This version is currently unsupported by the script')
             return sys.exit(1)
 
-        if re.match(r'[\d.]', minecraft) or not minecraft:
+        if re.match(r'[\d.]', minecraft):
             logger.info('Version selected: %s', 'latest' if not minecraft else minecraft)
             logger.info('Downloading vanilla loader...')
             try:
@@ -209,9 +209,10 @@ def vanilla_loader() -> str:
                 url: str = ''
                 if not minecraft:
                     minecraft = get_last_release()
-                for i in range(len(versions_json)):
-                    if versions_json[i]['id'] == minecraft:
-                        url = versions_json[i]['url']
+                for index, version in enumerate(versions_json):
+                    if version['id'] == minecraft:
+                        url = version['url']
+                    if index == len(versions_json):
                         break
                 with urlopen(url) as response:
                     version_json = json.loads(response.read())
@@ -300,7 +301,8 @@ def quilt_loader() -> str:
         while True:
             input_logger('Which version of Minecraft do you want to use? [latest]: ')
             minecraft: str = input().strip()
-            if minecraft and bool(re.match(r'[^\d.]', minecraft)):
+            minecraft = get_last_release() if not minecraft else minecraft
+            if bool(re.match(r'[^\d.]', minecraft)):
                 logger.warning('Minecraft version provided contain invalid characters!')
                 continue
             break
@@ -308,8 +310,6 @@ def quilt_loader() -> str:
         logger.info('Minecraft version selected: %s', 'latest' if not minecraft else minecraft)
         logger.debug('Installing quilt server...')
 
-        if not minecraft:
-            minecraft = get_last_release()
         while True:
             subprocess_logger(
                 ['java', '-jar', installer, 'install', 'server', minecraft, '--download-server'])
