@@ -17,7 +17,7 @@ CARPET_112 = 'https://gitlab.com/Xcom/carpetinstaller/uploads/24d0753d3f9a228e9b
 FABRIC_URL = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
 QUILT_URL = 'https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/latest/quilt-installer-latest.jar'
 PAPER_URL = 'https://api.papermc.io/v2/projects/paper/'
-MINECRAFT: str
+MINECRAFT = ''
 MCDR = 'mcdreforged'  # Global mcdr package name
 
 
@@ -202,7 +202,7 @@ def vanilla_loader() -> str:
             return sys.exit(1)
 
         if re.match(r'[\d.]', minecraft):
-            logger.info('Version selected: %s', 'latest', minecraft)
+            logger.info('Version selected: %s', minecraft)
             logger.info('Downloading vanilla loader...')
             try:
                 with urlopen(MOJANG_VERSIONS_MANIFEST) as response:
@@ -364,6 +364,10 @@ def carpet112_setup() -> str:
 
 
 def paper_loader() -> str:
+    """Function to install the Paper Loader
+
+    :return: Server jar name.
+    """
     logger.debug('Paper Loader setup')
     while True:
         input_logger('Which minecraft version do you want to use? [latest]: ')
