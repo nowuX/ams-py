@@ -24,5 +24,7 @@ $ python auto_mc_server.py
 - [Fabric](https://fabricmc.net/) [1.14 - 1.19+] ✔️
 - [Quilt](https://quiltmc.org/) [1.14 - 1.19+] ✔️
 - [Carpet112](https://github.com/gnembon/carpetmod112) [1.12.2] ✔️
+- [PaperMC](https://papermc.io/) [1.18.2 - 1.19] ✔️
+  - and some Legacy downloads [1.8.8 - 1.17.1]
 
 Not tested enough, may contain bugs. 😉
