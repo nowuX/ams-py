@@ -12,12 +12,13 @@ from urllib.request import urlopen
 import requests
 from colorlog import ColoredFormatter
 
-MOJANG_VERSIONS_MANIFEST: str = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
-CARPET_112: str = 'https://gitlab.com/Xcom/carpetinstaller/uploads/24d0753d3f9a228e9b8bbd46ce672dbe/carpetInstaller.jar'
-FABRIC_URL: str = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
-QUILT_URL: str = 'https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/latest/quilt-installer-latest.jar'
-MINECRAFT: str = ''
-MCDR: str = 'mcdreforged'  # Global mcdr package name
+MOJANG_VERSIONS_MANIFEST = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
+CARPET_112 = 'https://gitlab.com/Xcom/carpetinstaller/uploads/24d0753d3f9a228e9b8bbd46ce672dbe/carpetInstaller.jar'
+FABRIC_URL = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
+QUILT_URL = 'https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/latest/quilt-installer-latest.jar'
+PAPER_URL = 'https://api.papermc.io/v2/projects/paper/'
+MINECRAFT: str
+MCDR = 'mcdreforged'  # Global mcdr package name
 
 
 class ScriptLogger(logging.Logger):
@@ -201,29 +202,28 @@ def vanilla_loader() -> str:
             return sys.exit(1)
 
         if re.match(r'[\d.]', minecraft):
-            logger.info('Version selected: %s', 'latest' if not minecraft else minecraft)
+            logger.info('Version selected: %s', 'latest', minecraft)
             logger.info('Downloading vanilla loader...')
             try:
                 with urlopen(MOJANG_VERSIONS_MANIFEST) as response:
                     versions_json = json.loads(response.read())['versions']
-                url: str = ''
-                if not minecraft:
-                    minecraft = get_last_release()
                 for index, version in enumerate(versions_json):
                     if version['id'] == minecraft:
                         url = version['url']
-                    if index == len(versions_json):
+                        with urlopen(url) as response:
+                            version_json = json.loads(response.read())
+                        server_url: str = version_json['downloads']['server']['url']
+                        server_file = list(server_url.split('/'))[6]
+                        response = requests.get(server_url, allow_redirects=True)
+                        with open(server_file, 'wb') as file:
+                            file.write(response.content)
+                        globals()['MINECRAFT'] = minecraft
+                        logger.info('Vanilla server installation complete')
+                        return server_file.replace('.jar', '')
+                    if index == (len(versions_json) - 1):
+                        logger.warning('Version not found in Mojang manifest!')
                         break
-                with urlopen(url) as response:
-                    version_json = json.loads(response.read())
-                server_url: str = version_json['downloads']['server']['url']
-                server_file = list(server_url.split('/'))[6]
-                response = requests.get(server_url, allow_redirects=True)
-                with open(server_file, 'wb') as file:
-                    file.write(response.content)
-                globals()['MINECRAFT'] = minecraft
-                logger.info('Vanilla server installation complete')
-                return server_file.replace('.jar', '')
+
             except requests.exceptions.RequestException as err:
                 logger.error('Something failed: %s', err)
                 return sys.exit(1)
@@ -363,6 +363,43 @@ def carpet112_setup() -> str:
         return sys.exit(1)
 
 
+def paper_loader() -> str:
+    logger.debug('Paper Loader setup')
+    while True:
+        input_logger('Which minecraft version do you want to use? [latest]: ')
+        minecraft: str = input().strip()
+        minecraft = get_last_release() if not minecraft else minecraft
+        if re.match(r'[\d.]', minecraft):
+            logger.info('Version selected: %s', minecraft)
+            logger.info('Downloading paper loader...')
+            try:
+                with urlopen(PAPER_URL) as response:
+                    versions_json = json.loads(response.read())['versions']
+                for index, version in enumerate(versions_json):
+                    if version == minecraft:
+                        logger.debug('Version found')
+                        temp_url = f'{PAPER_URL}versions/{minecraft}/builds/'
+                        with urlopen(temp_url) as response:
+                            version_json = json.loads(response.read())
+                        build: str = version_json['builds'][-1]['build']
+                        server_file: str = version_json['builds'][-1]['downloads']['application']['name']
+                        server_url = f'{temp_url}{build}/downloads/{server_file}/'
+                        response = requests.get(server_url, allow_redirects=True)
+                        with open(server_file, 'wb') as file:
+                            file.write(response.content)
+                        globals()['MINECRAFT'] = minecraft
+                        logger.info('Paper server installation complete')
+                        return server_file.replace('.jar', '')
+                    if index == (len(versions_json) - 1):
+                        logger.warning('Version not found in PaperMC!')
+                        break
+            except requests.exceptions.RequestException as err:
+                logger.error('Something failed: %s', err)
+                return sys.exit(1)
+        else:
+            logger.warning('Version provided contain invalid characters')
+
+
 def loader_setup(loader: int) -> str:
     """Run function to each loader
 
@@ -378,6 +415,8 @@ def loader_setup(loader: int) -> str:
             return quilt_loader()
         case 4:
             return carpet112_setup()
+        case 5:
+            return paper_loader()
         case _:
             logger.error('Invalid loader option %s', loader)
             return sys.exit(1)
@@ -510,7 +549,8 @@ def server_loader() -> int:
     logger.info(' 2 | Fabric')
     logger.info(' 3 | Quilt')
     logger.info(' 4 | Carpet112 (Carpet 1.12)')
-    logger.info(' 5 | Close script')
+    logger.info(' 5 | Paper')
+    logger.info(' 6 | Close script')
     while True:
         input_logger('Select a option: ')
         option = input().lower().strip()
@@ -523,7 +563,9 @@ def server_loader() -> int:
                 return 3
             case '4' | 'carpet112':
                 return 4
-            case '5' | 'exit':
+            case '5' | 'paper':
+                return 5
+            case '6' | 'exit':
                 logger.info('Closing script...')
                 return sys.exit(0)
         logger.warning('Input is not within the options')
