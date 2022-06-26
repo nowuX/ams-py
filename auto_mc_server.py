@@ -15,6 +15,8 @@ from colorlog import ColoredFormatter
 MOJANG_VERSIONS_MANIFEST = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
 CARPET_112 = 'https://gitlab.com/Xcom/carpetinstaller/uploads/24d0753d3f9a228e9b8bbd46ce672dbe/carpetInstaller.jar'
 FABRIC_URL = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
+FORGE_URL = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json'
+FORGE_URL_2 = 'https://maven.minecraftforge.net/net/minecraftforge/forge/'
 QUILT_URL = 'https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/latest/quilt-installer-latest.jar'
 PAPER_URL = 'https://api.papermc.io/v2/projects/paper/'
 MINECRAFT = ''
@@ -142,7 +144,7 @@ def simple_yes_no(question: str, default_no=True) -> bool:
         ans = input().lower().strip()
         match ans[:1]:
             case '':
-                return False if default_no else default_no
+                return not bool(default_no)
             case 'yes' | 'y':
                 return True
             case 'no' | 'n':
@@ -285,6 +287,58 @@ def fabric_loader() -> str:
         return sys.exit(1)
 
 
+def forge_loader() -> str:
+    """Function to install the Forge Loader
+
+    :return: Server jar name.
+    """
+    logger.debug('Forge Loader setup')
+    logger.info('Downloading Forge Loader...')
+    while True:
+        input_logger('Which minecraft version do you want to use? [latest]: ')
+        minecraft: str = input().strip()
+        minecraft = get_last_release() if not minecraft else minecraft
+        if not re.match(r'[\d.]', minecraft):
+            logger.error('Version provided contain invalid characters')
+            continue
+
+        logger.info('Version selected: %s', minecraft)
+        logger.info('Downloading forge loader...')
+        try:
+            with urlopen(FORGE_URL) as response:
+                versions_json = json.loads(response.read())['promos']
+            for index, version_raw in enumerate(versions_json):
+                version_raw: str = version_raw.replace('-latest', '').replace('-recommended', '')
+                if version_raw == minecraft:
+                    if simple_yes_no('Do you want to use latest forge build?', default_no=False):
+                        version = f'{version_raw}-latest'
+                    else:
+                        version = f'{version_raw}-recommended'
+                    logger.debug('Using %s forge version', version)
+                    build = versions_json[version]
+                    version_build = f'{version_raw}-{build}'
+                    server_file = f'forge-{version_build}-installer.jar'
+                    server_url = f'{FORGE_URL_2}{version_build}/{server_file}'
+                    response = requests.get(server_url, allow_redirects=True)
+                    with open(server_file, 'wb') as file:
+                        file.write(response.content)
+                    subprocess_logger(['java', '-jar', server_file, '--installServer'])
+                    os.remove(server_file)
+                    os.remove(f'{server_file}.log')
+                    globals()['MINECRAFT'] = minecraft
+
+                    logger.info('Forge server installation complete')
+                    return server_file.replace('.jar', '')
+                if index == (len(versions_json) - 1):
+                    logger.warning('Version not found in ForgeFiles!')
+                    break
+        except requests.exceptions.RequestException as err:
+            logger.error('Something failed: %s', err)
+            return sys.exit(1)
+        except KeyError as err:
+            logger.error('%s is a invalid build index!', err)
+
+
 def quilt_loader() -> str:
     """Function to install the Quilt Loader
 
@@ -410,20 +464,24 @@ def loader_setup(loader: int) -> str:
     :param loader: Server loader.
     :return: Server loader jar name.
     """
+    server_file: str
     match loader:
         case 1:
-            return vanilla_loader()
+            server_file = vanilla_loader()
         case 2:
-            return fabric_loader()
+            server_file = fabric_loader()
         case 3:
-            return quilt_loader()
+            server_file = forge_loader()
         case 4:
-            return carpet112_setup()
+            server_file = quilt_loader()
         case 5:
-            return paper_loader()
+            server_file = carpet112_setup()
+        case 6:
+            server_file = paper_loader()
         case _:
             logger.error('Invalid loader option %s', loader)
             return sys.exit(1)
+    return server_file
 
 
 def launch_scripts(cmd: str):
@@ -454,6 +512,7 @@ def mcdr_setup(loader: int, py_cmd: str):
     :return: 0
     """
     logger.debug('MCDR setup')
+    logger.info('Using MCDR!')
     subprocess_logger([py_cmd, '-m', MCDR, 'init'])
     os.chdir('server')
     jar_name = loader_setup(loader)
@@ -551,28 +610,35 @@ def server_loader() -> int:
     logger.info('Which loader do you want to use?')
     logger.info(' 1 | Vanilla')
     logger.info(' 2 | Fabric')
-    logger.info(' 3 | Quilt')
-    logger.info(' 4 | Carpet112 (Carpet 1.12)')
-    logger.info(' 5 | Paper')
-    logger.info(' 6 | Close script')
+    logger.info(' 3 | Forge')
+    logger.info(' 4 | Quilt')
+    logger.info(' 5 | Carpet112 (Carpet 1.12)')
+    logger.info(' 6 | Paper')
+    logger.info(' 7 | Close script')
     while True:
         input_logger('Select a option: ')
         option = input().lower().strip()
+        loader_index: int
         match option:
             case '1' | 'vanilla':
-                return 1
+                loader_index = 1
             case '2' | 'fabric':
-                return 2
-            case '3' | 'quilt':
-                return 3
-            case '4' | 'carpet112':
-                return 4
-            case '5' | 'paper':
-                return 5
-            case '6' | 'exit':
+                loader_index = 2
+            case '3' | 'forge':
+                loader_index = 3
+            case '4' | 'quilt':
+                loader_index = 4
+            case '5' | 'carpet112':
+                loader_index = 5
+            case '6' | 'paper':
+                loader_index = 6
+            case '7' | 'exit':
                 logger.info('Closing script...')
                 return sys.exit(0)
-        logger.warning('Input is not within the options')
+            case _:
+                logger.warning('Input is not within the options')
+                continue
+        return loader_index
 
 
 def main():
@@ -581,12 +647,15 @@ def main():
     python = check_environment()
     mk_folder()
     loader = server_loader()
-    if simple_yes_no('Do you want to use MCDR?'):
+    if simple_yes_no('Do you want to use MCDR?') and loader != 3:
         mcdr_setup(loader, python)
         post_setup(is_mcdr=True, python=python)
     else:
+        if loader == 3:
+            logger.warning('Forge loader detected for stability some features of the script are disable')
         minecraft_jar: str = loader_setup(loader)
-        post_setup(python=python, jar_file=minecraft_jar)
+        if loader != 3:
+            post_setup(python=python, jar_file=minecraft_jar)
     logger.info('Script done')
     return 0
 

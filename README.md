@@ -22,6 +22,7 @@ $ python auto_mc_server.py
 
 - [Vanilla](https://www.minecraft.net/) [1.2.5 - 1.19+] ✔️
 - [Fabric](https://fabricmc.net/) [1.14 - 1.19+] ✔️
+- [Forge](https://github.com/MinecraftForge/MinecraftForge) [1.1 - 1.19+] ✔️
 - [Quilt](https://quiltmc.org/) [1.14 - 1.19+] ✔️
 - [Carpet112](https://github.com/gnembon/carpetmod112) [1.12.2] ✔️
 - [PaperMC](https://papermc.io/) [1.18.2 - 1.19] ✔️
