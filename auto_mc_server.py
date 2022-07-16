@@ -470,8 +470,8 @@ def loader_setup(loader: int) -> str:
             server_file = vanilla_loader()
         case 2:
             server_file = fabric_loader()
-        case 3:
-            server_file = forge_loader()
+        # case 3:
+        #     server_file = forge_loader()
         case 4:
             server_file = quilt_loader()
         case 5:
