@@ -11,13 +11,13 @@ import urllib3
 LOADERS: list = ['Vanilla', 'Fabric', 'Forge', 'Quilt', 'Carpet 1.12', 'Paper']
 PYTHON_CMD: str = ''
 SERVER_JAR: str = ''
-QUILT_URL = 'https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/latest/quilt-installer-latest.jar'
+MOJANG_VERSIONS_MANIFEST: str = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
 PAPER_URL: str = 'https://api.papermc.io/v2/projects/paper/'
 FORGE_URL: str = 'https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json'
 FORGE_URL2: str = 'https://maven.minecraftforge.net/net/minecraftforge/forge/'
 FABRIC_URL: str = 'https://maven.fabricmc.net/net/fabricmc/fabric-installer/0.11.0/fabric-installer-0.11.0.jar'
 CARPET_112: str = 'https://gitlab.com/Xcom/carpetinstaller/uploads/24d0753d3f9a228e9b8bbd46ce672dbe/carpetInstaller.jar'
-MOJANG_VERSIONS_MANIFEST: str = 'https://launchermeta.mojang.com/mc/game/version_manifest_v2.json'
+QUILT_URL = 'https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/latest/quilt-installer-latest.jar'
 
 
 def sp(args: str, exit_in_error=False):
