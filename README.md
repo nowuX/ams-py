@@ -1,5 +1,9 @@
 # auto-mc-server.py
 
+[![Tag](https://img.shields.io/github/v/tag/nowuX/auto-mc-server.py)](https://github.com/nowuX/auto-mc-server.py/releases)
+![Downloads](https://img.shields.io/github/downloads/nowuX/auto-mc-server.py/total)
+[![License](https://img.shields.io/github/license/nowuX/auto-mc-server.py)](https://opensource.org/licenses/MIT)
+
 My own python script 🐍 that makes it easier for me to set up minecraft servers, my english is bad btw 🤖.
 
 ### Usage
