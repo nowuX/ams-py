@@ -1,4 +1,4 @@
-# auto-mc-server.py
+# Semi-automatic Minecraft Server
 
 [![Tag](https://img.shields.io/github/v/tag/nowuX/auto-mc-server.py)](https://github.com/nowuX/auto-mc-server.py/releases)
 ![Downloads](https://img.shields.io/github/downloads/nowuX/auto-mc-server.py/total)
