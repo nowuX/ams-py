@@ -290,7 +290,7 @@ def mcdr_setup(loader: int, mc: str, is_forge: bool):
         importlib.import_module(mcdr)
     except ImportError:
         print(f'!! {mcdr} package is required')
-        if simple_yes_no('Do you want to autoinstall this package?', default_no=False):
+        if simple_yes_no('Do  want to autoinstall this package?', default_no=False):
             print('> Update pip packages')
             sp(f'{PYTHON_CMD} -m pip install --upgrade pip setuptools wheel')
             print(f'> Installing {mcdr} package')
@@ -394,7 +394,7 @@ def main():
     server_folder: str = re.sub(r'\W', '', input('→ Server folder name [mc_server]: ').replace(' ', '_'))
 
     server_folder = server_folder if server_folder else 'mc_server'
-    is_mcdr: bool = simple_yes_no('Dp you want to use MCDR?')
+    is_mcdr: bool = simple_yes_no('Do you want to use MCDR?')
     loader: int = server_loader()
     # CHECK IF IS FORGE
     is_forge: bool = LOADERS[loader] == 'Forge'
