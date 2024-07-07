@@ -1,3 +1,4 @@
+⚠️Broken fixed tomorrow, if is not fixed tomorrow read again this message⚠️
 # Semi-automatic Minecraft Server
 
 [![Tag](https://img.shields.io/github/v/tag/nowuX/auto-mc-server.py)](https://github.com/nowuX/auto-mc-server.py/releases)
